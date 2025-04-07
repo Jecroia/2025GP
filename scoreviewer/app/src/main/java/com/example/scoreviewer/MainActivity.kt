@@ -71,7 +71,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun openPdf(pdfFile: File?) {
         if (pdfFile == null) {
-            Log.e("PDFViewer", "파일이 null입니다.")
+            Log.e("PDFViewer", "Exception : PDF 파일 선택 실패")
             return
         }
 
@@ -128,8 +128,8 @@ class MainActivity : AppCompatActivity() {
             val pixels = pixmap.pixels
             val bitmap = Bitmap.createBitmap(width, height, Config.ARGB_8888)
             bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
-            page.destroy()
             pixmap.destroy()
+            page.destroy()
             bitmap
         } catch (e: Exception) {
             e.printStackTrace()
