@@ -9,6 +9,8 @@ import android.util.Log
 import android.widget.ImageView
 import android.widget.PopupWindow
 import android.widget.SeekBar
+import android.view.MenuItem
+import androidx.appcompat.widget.Toolbar
 import androidx.appcompat.app.AppCompatActivity
 import androidx.viewpager2.widget.ViewPager2
 import com.artifex.mupdf.fitz.ColorSpace
@@ -17,7 +19,6 @@ import com.artifex.mupdf.fitz.Matrix
 import com.artifex.mupdf.fitz.Page
 import com.artifex.mupdf.fitz.Pixmap
 import java.io.File
-import java.io.FileOutputStream
 import java.io.InputStream
 
 class MainActivity : AppCompatActivity() {
@@ -32,9 +33,17 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // 상단 툴바 연결
+        val toolbar: Toolbar = findViewById(R.id.toolbar)
+        setSupportActionBar(toolbar)
+
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+
+        // PDF 뷰어 및 페이지 넘김 연결
         viewPager = findViewById(R.id.viewPager)
         seekBar = findViewById(R.id.pageSeekBar)
 
+        // PDF 파일 선택
         openFilePicker()
     }
 
@@ -57,6 +66,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            android.R.id.home -> { // ← 버튼 ID
+                openFilePicker()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
     private fun copyUriToTempFile(uri: Uri): File? {
         return try {
             val inputStream: InputStream? = contentResolver.openInputStream(uri)
@@ -75,12 +94,15 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
+        // 기존 문서 닫기
         document?.destroy()
         document = Document.openDocument(pdfFile.absolutePath)
         val pageCount = document!!.countPages()
 
+        // PDF 어댑터 연결
         viewPager.adapter = PDFPagerAdapter(document!!, pageCount)
 
+        // SeekBar 설정
         seekBar.max = pageCount - 1
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onStartTrackingTouch(sb: SeekBar?) {
@@ -111,6 +133,7 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
+        // ViewPager 페이지 변경 → SeekBar 위치 동기화
         viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 seekBar.progress = position
