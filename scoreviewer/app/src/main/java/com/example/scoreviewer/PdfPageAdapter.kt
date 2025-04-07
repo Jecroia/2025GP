@@ -1,41 +1,42 @@
 package com.example.scoreviewer
 
 import android.graphics.Bitmap
+import android.view.LayoutInflater
 import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.recyclerview.widget.RecyclerView
 import com.artifex.mupdf.fitz.ColorSpace
 import com.artifex.mupdf.fitz.Document
 import com.artifex.mupdf.fitz.Matrix
-import com.artifex.mupdf.fitz.Pixmap
 
-class PdfPageAdapter(
+class PdfPagerAdapter(
     private val document: Document,
     private val pageCount: Int
-) : RecyclerView.Adapter<PdfPageAdapter.PdfPageViewHolder>() {
+) : RecyclerView.Adapter<PdfPagerAdapter.PageViewHolder>() {
 
-    inner class PdfPageViewHolder(val imageView: ImageView) : RecyclerView.ViewHolder(imageView)
+    class PageViewHolder(val imageView: ImageView) : RecyclerView.ViewHolder(imageView)
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PdfPageViewHolder {
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PageViewHolder {
         val imageView = ImageView(parent.context).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
+                ViewGroup.LayoutParams.MATCH_PARENT
             )
             scaleType = ImageView.ScaleType.FIT_CENTER
-            adjustViewBounds = true
-
-            maxHeight = (parent.context.resources.displayMetrics.heightPixels * 0.8).toInt()
         }
-        return PdfPageViewHolder(imageView)
+        return PageViewHolder(imageView)
     }
 
-    override fun onBindViewHolder(holder: PdfPageViewHolder, position: Int) {
+    override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
         val page = document.loadPage(position)
         val matrix = Matrix.Scale(1.0f)
         val pixmap = page.toPixmap(matrix, ColorSpace.DeviceRGB, true, true)
 
-        val bitmap = Bitmap.createBitmap(pixmap.width, pixmap.height, Bitmap.Config.ARGB_8888)
+        val bitmap = Bitmap.createBitmap(
+            pixmap.width,
+            pixmap.height,
+            Bitmap.Config.ARGB_8888
+        )
         bitmap.setPixels(pixmap.pixels, 0, pixmap.width, 0, 0, pixmap.width, pixmap.height)
 
         holder.imageView.setImageBitmap(bitmap)

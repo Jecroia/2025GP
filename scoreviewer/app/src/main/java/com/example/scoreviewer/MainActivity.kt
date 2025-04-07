@@ -4,33 +4,30 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.util.Log
+import android.widget.SeekBar
 import androidx.appcompat.app.AppCompatActivity
-import androidx.recyclerview.widget.LinearLayoutManager
-import androidx.recyclerview.widget.RecyclerView
+import androidx.viewpager2.widget.ViewPager2
 import com.artifex.mupdf.fitz.Document
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
-import java.io.OutputStream
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var recyclerView: RecyclerView
+    private lateinit var viewPager: ViewPager2
+    private lateinit var seekBar: SeekBar
     private var document: Document? = null
-
     private val PICK_PDF_FILE = 1001
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main) // XML 레이아웃 적용
 
-        // RecyclerView 생성 및 화면에 표시
-        recyclerView = RecyclerView(this).apply {
-            layoutManager = LinearLayoutManager(this@MainActivity, RecyclerView.HORIZONTAL, false)
-        }
-        setContentView(recyclerView)
+        // XML에서 정의된 뷰와 연결
+        viewPager = findViewById(R.id.viewPager)
+        seekBar = findViewById(R.id.pageSeekBar)
 
-        // 앱 시작 시 PDF 파일 선택 요청
-        openFilePicker()
+        openFilePicker() // 파일 선택기 열기
     }
 
     private fun openFilePicker() {
@@ -72,11 +69,28 @@ class MainActivity : AppCompatActivity() {
             return
         }
 
-        document?.destroy() // 기존 문서 있으면 정리
+        document?.destroy()
         document = Document.openDocument(pdfFile.absolutePath)
 
         val pageCount = document!!.countPages()
-        recyclerView.adapter = PdfPageAdapter(document!!, pageCount)
+
+        viewPager.adapter = PdfPagerAdapter(document!!, pageCount)
+
+        seekBar.max = pageCount - 1
+        seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) viewPager.currentItem = progress
+            }
+
+            override fun onStartTrackingTouch(sb: SeekBar?) {}
+            override fun onStopTrackingTouch(sb: SeekBar?) {}
+        })
+
+        viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) {
+                seekBar.progress = position
+            }
+        })
     }
 
     override fun onDestroy() {
