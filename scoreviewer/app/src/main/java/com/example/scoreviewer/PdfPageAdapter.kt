@@ -20,9 +20,12 @@ class PdfPageAdapter(
         val imageView = ImageView(parent.context).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
+                ViewGroup.LayoutParams.WRAP_CONTENT
             )
             scaleType = ImageView.ScaleType.FIT_CENTER
+            adjustViewBounds = true
+
+            maxHeight = (parent.context.resources.displayMetrics.heightPixels * 0.8).toInt()
         }
         return PdfPageViewHolder(imageView)
     }

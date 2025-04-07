@@ -1,6 +1,9 @@
 package com.example.scoreviewer
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -15,46 +18,69 @@ class MainActivity : AppCompatActivity() {
     private lateinit var recyclerView: RecyclerView
     private var document: Document? = null
 
+    private val PICK_PDF_FILE = 1001
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // RecyclerView 생성
+        // RecyclerView 생성 및 화면에 표시
         recyclerView = RecyclerView(this).apply {
             layoutManager = LinearLayoutManager(this@MainActivity, RecyclerView.HORIZONTAL, false)
         }
         setContentView(recyclerView)
 
-        // PDF 파일 불러오기
-        val pdfFile = copyAssetToFile("Chopin_Klavierwerke_Band_2_Peters_Op.31_600dpi.pdf")
-        if (pdfFile == null) return
+        // 앱 시작 시 PDF 파일 선택 요청
+        openFilePicker()
+    }
 
+    private fun openFilePicker() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "application/pdf"
+        }
+        startActivityForResult(intent, PICK_PDF_FILE)
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == PICK_PDF_FILE && resultCode == RESULT_OK) {
+            data?.data?.let { uri ->
+                val file = copyUriToTempFile(uri)
+                openPdf(file)
+            }
+        }
+    }
+
+    private fun copyUriToTempFile(uri: Uri): File? {
+        return try {
+            val inputStream: InputStream? = contentResolver.openInputStream(uri)
+            val tempFile = File.createTempFile("selected_pdf", ".pdf", cacheDir)
+            tempFile.outputStream().use { output ->
+                inputStream?.copyTo(output)
+            }
+            tempFile
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    private fun openPdf(pdfFile: File?) {
+        if (pdfFile == null) {
+            Log.e("PDFViewer", "파일이 null입니다.")
+            return
+        }
+
+        document?.destroy() // 기존 문서 있으면 정리
         document = Document.openDocument(pdfFile.absolutePath)
 
-        // 페이지 수 가져오기
         val pageCount = document!!.countPages()
-
-        // 어댑터 연결
         recyclerView.adapter = PdfPageAdapter(document!!, pageCount)
     }
 
-    private fun copyAssetToFile(assetName: String): File? {
-        var tempFile: File? = null
-        try {
-            val inputStream: InputStream = assets.open(assetName)
-            tempFile = File.createTempFile("temp_pdf", ".pdf", cacheDir)
-            tempFile.deleteOnExit()
-            val outputStream: OutputStream = FileOutputStream(tempFile)
-            val buffer = ByteArray(1024)
-            var read: Int
-            while (inputStream.read(buffer).also { read = it } != -1) {
-                outputStream.write(buffer, 0, read)
-            }
-            outputStream.flush()
-            outputStream.close()
-            inputStream.close()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        return tempFile
+    override fun onDestroy() {
+        super.onDestroy()
+        document?.destroy()
     }
 }
