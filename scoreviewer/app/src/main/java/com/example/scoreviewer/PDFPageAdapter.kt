@@ -9,10 +9,10 @@ import com.artifex.mupdf.fitz.ColorSpace
 import com.artifex.mupdf.fitz.Document
 import com.artifex.mupdf.fitz.Matrix
 
-class PdfPagerAdapter(
+class PDFPagerAdapter(
     private val document: Document,
     private val pageCount: Int
-) : RecyclerView.Adapter<PdfPagerAdapter.PageViewHolder>() {
+) : RecyclerView.Adapter<PDFPagerAdapter.PageViewHolder>() {
 
     class PageViewHolder(val imageView: ImageView) : RecyclerView.ViewHolder(imageView)
 

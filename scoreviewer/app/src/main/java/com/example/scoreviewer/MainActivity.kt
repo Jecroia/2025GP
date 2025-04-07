@@ -79,7 +79,7 @@ class MainActivity : AppCompatActivity() {
         document = Document.openDocument(pdfFile.absolutePath)
         val pageCount = document!!.countPages()
 
-        viewPager.adapter = PDFPagerAdapter(this, document!!)
+        viewPager.adapter = PDFPagerAdapter(document!!, pageCount)
 
         seekBar.max = pageCount - 1
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
