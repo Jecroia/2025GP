@@ -1,15 +1,40 @@
+# Android build files
+/build/
+app/build/
+.externalNativeBuild/
+.cxx/
+obj/
+captures/
+
+# Gradle
+.gradle/
+.gradle-local/
+build/
+*.apk
+*.ap_
+
+# IDE
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+
+# OS
 .DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+Thumbs.db
+
+# Local
 local.properties
+google-services.json
+
+# Logs
+*.log
+.kotlinc/
+
+# Kotlin compile errors
+.kotlinc/
+.idea/vcs.xml
+.idea/misc.xml
