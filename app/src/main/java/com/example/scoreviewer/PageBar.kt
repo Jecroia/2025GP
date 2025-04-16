@@ -2,6 +2,7 @@ package com.example.scoreviewer
 
 import android.graphics.Bitmap
 import android.view.MotionEvent
+import android.view.View
 import android.widget.SeekBar
 import com.artifex.mupdf.fitz.*
 
@@ -12,14 +13,15 @@ class PageBar(
     var onThumbnailRequested: ((bitmap: Bitmap, xPos: Int, yPos: Int) -> Unit)? = null
     var onPageSelected: ((page: Int) -> Unit)? = null
 
+    private var pageSeekBar: SeekBar? = null  // 기존 seekBar 참조를 저장할 멤버 변수
     private var isLongPress = false
     private var longPressRunnable: Runnable? = null
-    private val longPressThreshold = 300L // 롱프레스 기준 시간
+    private val longPressThreshold = 300L // 롱프레스 기준 시간 (300ms)
 
     fun initializeSeekBar(seekBar: SeekBar) {
+        pageSeekBar = seekBar
         seekBar.max = pageCount - 1
 
-        // 기본 드래그 이벤트 처리
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onStartTrackingTouch(sb: SeekBar?) {
                 isLongPress = true
@@ -43,7 +45,6 @@ class PageBar(
             }
         })
 
-        // 터치 이벤트 처리 (드래그가 아닌 단순 터치 시 썸네일 표시되지 않도록, 길게 눌렀을 때만 동작)
         seekBar.setOnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -80,7 +81,20 @@ class PageBar(
         }
     }
 
-    // hideThumbnail()를 통해 빈 비트맵으로 썸네일 제거 요청
+    // SeekBar 활성화/비활성화 함수
+    fun setSeekBarActive(active: Boolean) {
+        pageSeekBar?.let {
+            if (active) {
+                it.visibility = View.VISIBLE
+                it.isEnabled = true
+            } else {
+                it.visibility = View.GONE
+                it.isEnabled = false
+            }
+        }
+    }
+
+    // 썸네일을 숨기기 위해 빈 비트맵과 -1 좌표를 전달
     private fun hideThumbnail() {
         onThumbnailRequested?.invoke(Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888), -1, -1)
     }
@@ -90,7 +104,7 @@ class PageBar(
         val xPos = calculateThumbX(seekBar, pageIndex)
         val location = IntArray(2)
         seekBar.getLocationOnScreen(location)
-        val yPos = location[1] + seekBar.height + 10  // 썸네일은 SeekBar 하단에 뜨게 함
+        val yPos = location[1] + seekBar.height + 10  // 썸네일은 SeekBar 하단에 표시
         onThumbnailRequested?.invoke(bitmap, xPos, yPos)
     }
 
