@@ -79,6 +79,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+
     private fun openPdf(pdfFile: File?) {
         if (pdfFile == null) {
             Log.e("PDFViewer", "PDF 파일 선택 실패")
