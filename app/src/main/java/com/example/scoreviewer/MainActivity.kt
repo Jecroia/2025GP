@@ -10,7 +10,6 @@ import android.widget.FrameLayout
 import android.widget.SeekBar
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
-import androidx.fragment.app.commit
 import androidx.viewpager2.widget.ViewPager2
 import com.artifex.mupdf.fitz.Document
 import java.io.File
@@ -58,6 +57,15 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            android.R.id.home -> { // ← 버튼 ID
+                openFilePicker()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
 
     private fun copyUriToTempFile(uri: Uri): File? {
         return try {
@@ -83,52 +91,39 @@ class MainActivity : AppCompatActivity() {
 
         viewPager.adapter = PDFPagerAdapter(document!!, pageCount)
 
-        // PageBar 생성 및 SeekBar 초기화
         pageBar = PageBar(document!!, pageCount)
         pageBar?.initializeSeekBar(seekBar)
-
 
         pageBar?.onPageSelected = { page ->
             viewPager.setCurrentItem(page, true)
         }
 
-        // 썸네일 띄우는 콜백 (기존에 있던 코드)
-        pageBar?.onThumbnailRequested = { thumbnail, xPos ->
-            if (xPos < 0) {
-                fragThumbnail?.let {
-                    if (it.isAdded) {
-                        supportFragmentManager.commit { remove(it) }
-                        fragThumbnail = null
-                    }
-                }
-            } else {
-                val location = IntArray(2)
-                seekBar.getLocationOnScreen(location)
-                val yPos = location[1] - 10
-                showOrUpdateThumbnail(thumbnail, xPos, yPos)
-            }
+        pageBar?.onThumbnailRequested = { bitmap, x, y ->
+            handleThumbnailRequest(bitmap, x, y)
         }
 
-        // ViewPager → SeekBar 동기화
         viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 seekBar.progress = position
             }
         })
     }
-
-
-    private fun showOrUpdateThumbnail(bitmap: Bitmap, xPos: Int, yPos: Int) {
-        if (fragThumbnail == null) {
-            fragThumbnail = Frag_Thumbnail()
-            supportFragmentManager.commit {
-                add(R.id.thumbnail_container, fragThumbnail!!, "thumbnail")
-            }
-            thumbnailContainer.post {
-                fragThumbnail?.updateThumbnail(bitmap, xPos, yPos)
+    private fun handleThumbnailRequest(bitmap: Bitmap, x: Int, y: Int) {
+        if (x < 0 || y < 0) {
+            fragThumbnail?.let {
+                supportFragmentManager.beginTransaction()
+                    .remove(it)
+                    .commitAllowingStateLoss()
+                fragThumbnail = null
             }
         } else {
-            fragThumbnail?.updateThumbnail(bitmap, xPos, yPos)
+            if (fragThumbnail == null) {
+                fragThumbnail = Frag_Thumbnail.newInstance(x, y)
+                supportFragmentManager.beginTransaction()
+                    .replace(R.id.thumbnail_container, fragThumbnail!!)
+                    .commitAllowingStateLoss()
+            }
+            fragThumbnail?.updateThumbnail(bitmap, x, y)
         }
     }
 

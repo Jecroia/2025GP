@@ -40,10 +40,6 @@
         "source": "C:\\Users\\idmh1\\.gradle\\daemon\\8.11.1\\com.example.scoreviewer.app-main-41:\\drawable\\ic_launcher_foreground.xml"
     },
     {
-        "merged": "com.example.scoreviewer.app-debug-39:/layout_fragment_thumbnail.xml.flat",
-        "source": "com.example.scoreviewer.app-main-41:/layout/fragment_thumbnail.xml"
-    },
-    {
         "merged": "C:\\Users\\idmh1\\.gradle\\daemon\\8.11.1\\com.example.scoreviewer.app-debug-39:\\mipmap-mdpi_ic_launcher_round.webp.flat",
         "source": "C:\\Users\\idmh1\\.gradle\\daemon\\8.11.1\\com.example.scoreviewer.app-main-41:\\mipmap-mdpi\\ic_launcher_round.webp"
     },

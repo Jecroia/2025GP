@@ -24,8 +24,8 @@
         android:layout_width="0dp"
         android:layout_height="0dp"
         android:background="#FFFFFF"
-        app:layout_constraintTop_toBottomOf="@id/toolbar"
-        app:layout_constraintBottom_toTopOf="@id/pageSeekBar"
+        app:layout_constraintTop_toBottomOf="@id/pageSeekBar"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
 
@@ -34,11 +34,13 @@
         android:id="@+id/pageSeekBar"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
         android:layout_marginBottom="8dp"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
+        android:background="#FFB6C1"
         app:layout_constraintEnd_toEndOf="parent"
-        android:background="#FFB6C1" />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:layout_constraintBottom_toTopOf="@id/viewPager" />
 
     <!-- 오버레이 썸네일 컨테이너 -->
     <FrameLayout

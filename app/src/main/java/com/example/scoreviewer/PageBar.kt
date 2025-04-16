@@ -2,7 +2,6 @@ package com.example.scoreviewer
 
 import android.graphics.Bitmap
 import android.view.MotionEvent
-import android.view.View
 import android.widget.SeekBar
 import com.artifex.mupdf.fitz.*
 
@@ -10,17 +9,17 @@ class PageBar(
     private val pdfDocument: Document,
     private val pageCount: Int
 ) {
-    var onThumbnailRequested: ((bitmap: Bitmap, xPosition: Int) -> Unit)? = null
+    var onThumbnailRequested: ((bitmap: Bitmap, xPos: Int, yPos: Int) -> Unit)? = null
     var onPageSelected: ((page: Int) -> Unit)? = null
 
     private var isLongPress = false
     private var longPressRunnable: Runnable? = null
-    private val longPressThreshold = 300L // 0.3초 이상 누르면 롱프레스 처리
+    private val longPressThreshold = 300L // 롱프레스 기준 시간
 
     fun initializeSeekBar(seekBar: SeekBar) {
         seekBar.max = pageCount - 1
 
-        // ✅ 드래그를 감지하는 기본 리스너
+        // 기본 드래그 이벤트 처리
         seekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onStartTrackingTouch(sb: SeekBar?) {
                 isLongPress = true
@@ -36,9 +35,7 @@ class PageBar(
             override fun onStopTrackingTouch(sb: SeekBar?) {
                 if (sb != null) {
                     if (isLongPress) {
-                        onThumbnailRequested?.invoke(
-                            Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888), -1
-                        )
+                        hideThumbnail()
                     }
                     onPageSelected?.invoke(sb.progress)
                     isLongPress = false
@@ -46,7 +43,7 @@ class PageBar(
             }
         })
 
-        //롱프레스를 감지하는 터치 리스너
+        // 터치 이벤트 처리 (드래그가 아닌 단순 터치 시 썸네일 표시되지 않도록, 길게 눌렀을 때만 동작)
         seekBar.setOnTouchListener { v, event ->
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
@@ -60,7 +57,6 @@ class PageBar(
                     }
                     seekBar.postDelayed(longPressRunnable!!, longPressThreshold)
                 }
-
                 MotionEvent.ACTION_MOVE -> {
                     if (isLongPress) {
                         val touchX = event.x.toInt()
@@ -69,20 +65,14 @@ class PageBar(
                         updateThumbnail(progress, seekBar)
                     }
                 }
-
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     longPressRunnable?.let { seekBar.removeCallbacks(it) }
                     longPressRunnable = null
-
                     if (isLongPress) {
-                        onThumbnailRequested?.invoke(
-                            Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888), -1
-                        )
+                        hideThumbnail()
                     }
-
                     onPageSelected?.invoke(seekBar.progress)
                     isLongPress = false
-
                     v.performClick()
                 }
             }
@@ -90,10 +80,18 @@ class PageBar(
         }
     }
 
+    // hideThumbnail()를 통해 빈 비트맵으로 썸네일 제거 요청
+    private fun hideThumbnail() {
+        onThumbnailRequested?.invoke(Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888), -1, -1)
+    }
+
     private fun updateThumbnail(pageIndex: Int, seekBar: SeekBar) {
         val bitmap = renderPageThumbnail(pageIndex)
         val xPos = calculateThumbX(seekBar, pageIndex)
-        onThumbnailRequested?.invoke(bitmap, xPos)
+        val location = IntArray(2)
+        seekBar.getLocationOnScreen(location)
+        val yPos = location[1] + seekBar.height + 10  // 썸네일은 SeekBar 하단에 뜨게 함
+        onThumbnailRequested?.invoke(bitmap, xPos, yPos)
     }
 
     private fun calculateThumbX(seekBar: SeekBar, progress: Int): Int {
@@ -118,4 +116,3 @@ class PageBar(
         return bitmap
     }
 }
-
