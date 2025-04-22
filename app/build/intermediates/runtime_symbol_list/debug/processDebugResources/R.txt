@@ -2999,6 +2999,8 @@ int drawable abc_textfield_search_material 0x7f070076
 int drawable abc_vector_test 0x7f070077
 int drawable avd_hide_password 0x7f070078
 int drawable avd_show_password 0x7f070079
+int drawable baseline_toggle_off_24 0x7f0700e7
+int drawable baseline_toggle_on_24 0x7f0700e8
 int drawable btn_checkbox_checked_mtrl 0x7f07007a
 int drawable btn_checkbox_checked_to_unchecked_mtrl_animation 0x7f07007b
 int drawable btn_checkbox_unchecked_mtrl 0x7f07007c
@@ -3032,6 +3034,7 @@ int drawable ic_mtrl_chip_checked_black 0x7f070097
 int drawable ic_mtrl_chip_checked_circle 0x7f070098
 int drawable ic_mtrl_chip_close_circle 0x7f070099
 int drawable ic_search_black_24 0x7f07009a
+int drawable ic_toggle 0x7f0700e9
 int drawable indeterminate_static 0x7f07009b
 int drawable m3_avd_hide_password 0x7f07009c
 int drawable m3_avd_show_password 0x7f07009d
@@ -3209,6 +3212,7 @@ int id bounce 0x7f080061
 int id bounceBoth 0x7f080062
 int id bounceEnd 0x7f080063
 int id bounceStart 0x7f080064
+int id btnToggleSeekBar 0x7f080200
 int id buttonPanel 0x7f080065
 int id cache_measures 0x7f080066
 int id callMeasure 0x7f080067

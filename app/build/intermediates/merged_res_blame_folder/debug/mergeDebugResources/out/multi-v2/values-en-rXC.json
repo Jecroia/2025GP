@@ -4,7 +4,7 @@
             "outputFile": "com.example.scoreviewer.app-mergeDebugResources-37:/values-en-rXC/values-en-rXC.xml",
             "map": [
                 {
-                    "source": "C:\\Users\\idmh1\\.gradle\\caches\\8.11.1\\transforms\\350d5ddf270a6141e3bd1b1db6b775e2\\transformed\\core-1.15.0\\res\\values-en-rXC\\values-en-rXC.xml",
+                    "source": "C:\\Users\\Jecro\\.gradle\\caches\\8.11.1\\transforms\\350d5ddf270a6141e3bd1b1db6b775e2\\transformed\\core-1.15.0\\res\\values-en-rXC\\values-en-rXC.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9",
                         "startColumns": "4,4,4,4,4,4,4,4",
@@ -21,7 +21,7 @@
                     }
                 },
                 {
-                    "source": "C:\\Users\\idmh1\\.gradle\\caches\\8.11.1\\transforms\\feb16b5f2b5f6eba2a896e55e2d11b2b\\transformed\\appcompat-1.7.0\\res\\values-en-rXC\\values-en-rXC.xml",
+                    "source": "C:\\Users\\Jecro\\.gradle\\caches\\8.11.1\\transforms\\feb16b5f2b5f6eba2a896e55e2d11b2b\\transformed\\appcompat-1.7.0\\res\\values-en-rXC\\values-en-rXC.xml",
                     "from": {
                         "startLines": "2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29",
                         "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",

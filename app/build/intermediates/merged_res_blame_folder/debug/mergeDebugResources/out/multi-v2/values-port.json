@@ -4,7 +4,7 @@
             "outputFile": "com.example.scoreviewer.app-mergeDebugResources-37:/values-port/values-port.xml",
             "map": [
                 {
-                    "source": "C:\\Users\\idmh1\\.gradle\\caches\\8.11.1\\transforms\\feb16b5f2b5f6eba2a896e55e2d11b2b\\transformed\\appcompat-1.7.0\\res\\values-port\\values-port.xml",
+                    "source": "C:\\Users\\Jecro\\.gradle\\caches\\8.11.1\\transforms\\feb16b5f2b5f6eba2a896e55e2d11b2b\\transformed\\appcompat-1.7.0\\res\\values-port\\values-port.xml",
                     "from": {
                         "startLines": "2",
                         "startColumns": "4",

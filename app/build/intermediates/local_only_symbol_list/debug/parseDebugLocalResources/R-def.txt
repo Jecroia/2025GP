@@ -2,8 +2,12 @@ R_DEF: Internal format may change without notice
 local
 color black
 color white
+drawable baseline_toggle_off_24
+drawable baseline_toggle_on_24
 drawable ic_launcher_background
 drawable ic_launcher_foreground
+drawable ic_toggle
+id btnToggleSeekBar
 id pageSeekBar
 id thumbnailImageView
 id thumbnailRoot
