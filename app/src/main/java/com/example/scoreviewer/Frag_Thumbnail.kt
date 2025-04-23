@@ -80,7 +80,7 @@ class Frag_Thumbnail : Fragment() {
      * 부모(rootView)의 translationY를 적용합니다.
      */
     private fun applyTranslation(xPosition: Int, yPosition: Int) {
-        val screenWidth = resources.displayMetrics.widthPixels
+        val screenWidth = thumbnailImageView.resources.displayMetrics.widthPixels
         val halfWidth = thumbnailImageView.width / 2f
 
         var adjustedX = (xPosition - halfWidth)
