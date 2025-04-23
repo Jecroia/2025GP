@@ -11,19 +11,20 @@ import android.widget.SeekBar
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.viewpager2.widget.ViewPager2
-import com.artifex.mupdf.fitz.Document
 import java.io.File
 import java.io.InputStream
 
 class MainActivity : AppCompatActivity() {
 
+    private val pdfManager = PdfManager()
+
     private lateinit var viewPager: ViewPager2
     private lateinit var seekBar: SeekBar
     private lateinit var thumbnailContainer: FrameLayout
-    private var document: Document? = null
-    private val PICK_PDF_FILE = 1001
     private var pageBar: PageBar? = null
     private var fragThumbnail: Frag_Thumbnail? = null
+
+    private val PICK_PDF_FILE = 1001
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -52,63 +53,46 @@ class MainActivity : AppCompatActivity() {
         super.onActivityResult(requestCode, resultCode, data)
         if (requestCode == PICK_PDF_FILE && resultCode == RESULT_OK) {
             data?.data?.let { uri ->
-                val file = copyUriToTempFile(uri)
-                openPdf(file)
+                copyUriToTempFile(uri)?.let { file ->
+                    openPdf(file)
+                }
             }
         }
     }
-    override fun onOptionsItemSelected(item: MenuItem): Boolean {
-        return when (item.itemId) {
-            android.R.id.home -> { // ← 버튼 ID
-                openFilePicker()
-                true
+
+    private fun copyUriToTempFile(uri: Uri): File? = try {
+        contentResolver.openInputStream(uri)?.use { input ->
+            File.createTempFile("selected_pdf", ".pdf", cacheDir).apply {
+                outputStream().use { output -> input.copyTo(output) }
             }
-            else -> super.onOptionsItemSelected(item)
         }
+    } catch (e: Exception) {
+        e.printStackTrace()
+        null
     }
 
-    private fun copyUriToTempFile(uri: Uri): File? {
-        return try {
-            val inputStream: InputStream? = contentResolver.openInputStream(uri)
-            val tempFile = File.createTempFile("selected_pdf", ".pdf", cacheDir)
-            tempFile.outputStream().use { output -> inputStream?.copyTo(output) }
-            tempFile
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
-    }
+    private fun openPdf(pdfFile: File) {
+        pdfManager.open(pdfFile.absolutePath)
+        val count = pdfManager.pageCount()
 
+        // 뷰페이저 & 어댑터
+        viewPager.adapter = PDFPagerAdapter(pdfManager, count)
 
-    private fun openPdf(pdfFile: File?) {
-        if (pdfFile == null) {
-            Log.e("PDFViewer", "PDF 파일 선택 실패")
-            return
+        // seekbar + PageBar 초기화
+        pageBar = PageBar(pdfManager, count).also {
+            it.initializeSeekBar(seekBar)
+            it.onPageSelected = { page -> viewPager.setCurrentItem(page, true) }
+            it.onThumbnailRequested = { bm, x, y -> handleThumbnailRequest(bm, x, y) }
         }
 
-        document?.destroy()
-        document = Document.openDocument(pdfFile.absolutePath)
-        val pageCount = document!!.countPages()
-
-        viewPager.adapter = PDFPagerAdapter(document!!, pageCount)
-
-        pageBar = PageBar(document!!, pageCount)
-        pageBar?.initializeSeekBar(seekBar)
-
-        pageBar?.onPageSelected = { page ->
-            viewPager.setCurrentItem(page, true)
-        }
-
-        pageBar?.onThumbnailRequested = { bitmap, x, y ->
-            handleThumbnailRequest(bitmap, x, y)
-        }
-
+        // ViewPager → SeekBar 동기화
         viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 seekBar.progress = position
             }
         })
     }
+
     private fun handleThumbnailRequest(bitmap: Bitmap, x: Int, y: Int) {
         if (x < 0 || y < 0) {
             fragThumbnail?.let {
@@ -130,6 +114,16 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        document?.destroy()
+        pdfManager.close()
     }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean =
+        when (item.itemId) {
+            android.R.id.home -> {
+                openFilePicker()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
 }
+

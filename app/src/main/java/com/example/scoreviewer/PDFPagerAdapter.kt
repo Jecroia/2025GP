@@ -5,11 +5,10 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.recyclerview.widget.RecyclerView
 import com.artifex.mupdf.fitz.ColorSpace
-import com.artifex.mupdf.fitz.Document
 import com.artifex.mupdf.fitz.Matrix
 
 class PDFPagerAdapter(
-    private val document: Document,
+    private val pdfManager: PdfManager,
     private val pageCount: Int
 ) : RecyclerView.Adapter<PDFPagerAdapter.PageViewHolder>() {
 
@@ -27,9 +26,9 @@ class PDFPagerAdapter(
     }
 
     override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
-        val page = document.loadPage(position)
-        val matrix = Matrix.Scale(1.0f)
-        val pixmap = page.toPixmap(matrix, ColorSpace.DeviceRGB, true, true)
+        // PdfManager 로부터 페이지 로드
+        val page = pdfManager.loadPage(position)
+        val pixmap = page.toPixmap(Matrix.Scale(1.0f), ColorSpace.DeviceRGB, true, true)
 
         val bitmap = Bitmap.createBitmap(
             pixmap.width,
@@ -39,8 +38,6 @@ class PDFPagerAdapter(
         bitmap.setPixels(pixmap.pixels, 0, pixmap.width, 0, 0, pixmap.width, pixmap.height)
 
         holder.imageView.setImageBitmap(bitmap)
-
-        //자원 정리
         page.destroy()
         pixmap.destroy()
     }

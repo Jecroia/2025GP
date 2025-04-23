@@ -2,7 +2,6 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/modules/scoreviewer.iml" filepath="$PROJECT_DIR$/.idea/modules/scoreviewer.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/app/scoreviewer.app.iml" filepath="$PROJECT_DIR$/.idea/modules/app/scoreviewer.app.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/app/scoreviewer.app.androidTest.iml" filepath="$PROJECT_DIR$/.idea/modules/app/scoreviewer.app.androidTest.iml" />
       <module fileurl="file://$PROJECT_DIR$/.idea/modules/app/scoreviewer.app.main.iml" filepath="$PROJECT_DIR$/.idea/modules/app/scoreviewer.app.main.iml" />
