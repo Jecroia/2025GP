@@ -4,17 +4,14 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Bundle
-import android.util.Log
 import android.view.MenuItem
 import android.widget.FrameLayout
 import android.widget.SeekBar
 import android.widget.ImageButton
-import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.viewpager2.widget.ViewPager2
 import java.io.File
-import java.io.InputStream
 
 class MainActivity : AppCompatActivity() {
 
@@ -30,6 +27,17 @@ class MainActivity : AppCompatActivity() {
 
     private val PICK_PDF_FILE = 1001
 
+    enum class Tool {
+        PEN, HIGHLIGHTER, ERASER, TEXT
+    }
+    private var currentTool: Tool = Tool.PEN
+    private lateinit var annotationCanvas: AnnotationCanvasView
+    private lateinit var btnPen: ImageButton
+    private lateinit var btnHighlighter: ImageButton
+    private lateinit var btnText: ImageButton
+    private lateinit var btnEraser: ImageButton
+    private lateinit var btnUndo: ImageButton
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -43,7 +51,6 @@ class MainActivity : AppCompatActivity() {
         thumbnailContainer = findViewById(R.id.thumbnail_container)
 
         btnToggleSeekBar = findViewById(R.id.btnToggleSeekBar)
-
         btnToggleSeekBar.setOnClickListener {
             isSeekBarActive = !isSeekBarActive
             pageBar?.setSeekBarActive(isSeekBarActive)
@@ -55,7 +62,24 @@ class MainActivity : AppCompatActivity() {
 
             btnToggleSeekBar.setImageResource(icon)
         }
+        val annotationCanvas = findViewById<AnnotationCanvasView>(R.id.annotationCanvas)
+        var currentTool = Tool.PEN
 
+        btnPen.setOnClickListener {
+            currentTool = Tool.PEN
+            annotationCanvas.setTool(currentTool)
+        }
+        btnHighlighter.setOnClickListener {
+            currentTool = Tool.HIGHLIGHTER
+            annotationCanvas.setTool(currentTool)
+        }
+        btnEraser.setOnClickListener {
+            currentTool = Tool.ERASER
+            annotationCanvas.setTool(currentTool)
+        }
+        btnUndo.setOnClickListener {
+            annotationCanvas.undoLastStroke()
+        }
         openFilePicker()
     }
 

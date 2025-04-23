@@ -23,6 +23,52 @@
             android:src="@drawable/baseline_toggle_off_24"
             android:contentDescription="토글"
             android:padding="8dp"/>
+
+        <!-- 펜 -->
+        <ImageButton
+            android:id="@+id/btnPen"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:src="@drawable/tool_pen_24"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="펜" />
+
+        <!-- 형광펜 -->
+        <ImageButton
+            android:id="@+id/btnHighlighter"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:src="@drawable/tool_highlight_24"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="형광펜" />
+
+        <!-- 텍스트 -->
+        <ImageButton
+            android:id="@+id/btnText"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:src="@drawable/tool_text_24"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="텍스트" />
+
+        <!-- 지우개 -->
+        <ImageButton
+            android:id="@+id/btnEraser"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:src="@drawable/tool_eraser_24"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="지우개" />
+
+        <!-- 되돌리기 -->
+        <ImageButton
+            android:id="@+id/btnUndo"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:src="@drawable/tool_undo_24"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="되돌리기" />
+
     </androidx.appcompat.widget.Toolbar>
 
     <!-- PDF 뷰 영역 -->
@@ -35,6 +81,14 @@
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"/>
+
+       <!-- 캔버스 오버레이: 필기용 CustomView -->
+       <com.example.scoreviewer.AnnotationCanvasView
+           android:id="@+id/annotationCanvas"
+           android:layout_width="match_parent"
+           android:layout_height="match_parent"
+           android:clickable="true"
+           android:focusable="true"/>
 
     <!-- 하단 페이지 탐색 SeekBar -->
     <SeekBar
