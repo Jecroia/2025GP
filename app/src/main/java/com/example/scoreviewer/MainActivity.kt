@@ -8,6 +8,8 @@ import android.util.Log
 import android.view.MenuItem
 import android.widget.FrameLayout
 import android.widget.SeekBar
+import android.widget.ImageButton
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.viewpager2.widget.ViewPager2
@@ -23,6 +25,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var thumbnailContainer: FrameLayout
     private var pageBar: PageBar? = null
     private var fragThumbnail: Frag_Thumbnail? = null
+    private lateinit var btnToggleSeekBar: ImageButton
+    private var isSeekBarActive = true
 
     private val PICK_PDF_FILE = 1001
 
@@ -37,6 +41,20 @@ class MainActivity : AppCompatActivity() {
         viewPager = findViewById(R.id.viewPager)
         seekBar = findViewById(R.id.pageSeekBar)
         thumbnailContainer = findViewById(R.id.thumbnail_container)
+
+        btnToggleSeekBar = findViewById(R.id.btnToggleSeekBar)
+
+        btnToggleSeekBar.setOnClickListener {
+            isSeekBarActive = !isSeekBarActive
+            pageBar?.setSeekBarActive(isSeekBarActive)
+
+            val icon = if (isSeekBarActive)
+                R.drawable.baseline_toggle_on_24
+            else
+                R.drawable.baseline_toggle_off_24
+
+            btnToggleSeekBar.setImageResource(icon)
+        }
 
         openFilePicker()
     }
