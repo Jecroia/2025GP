@@ -1,13 +1,18 @@
+// MainActivity.kt
 package com.example.scoreviewer
 
+import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
-import android.view.MenuItem
+import android.view.inputmethod.InputMethodManager
+import android.view.inputmethod.EditorInfo
+import android.widget.EditText
 import android.widget.FrameLayout
-import android.widget.SeekBar
 import android.widget.ImageButton
+import android.widget.SeekBar
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.viewpager2.widget.ViewPager2
@@ -22,21 +27,19 @@ class MainActivity : AppCompatActivity() {
     private lateinit var thumbnailContainer: FrameLayout
     private var pageBar: PageBar? = null
     private var fragThumbnail: Frag_Thumbnail? = null
-    private lateinit var btnToggleSeekBar: ImageButton
-    private var isSeekBarActive = true
 
-    private val PICK_PDF_FILE = 1001
-
-    enum class Tool {
-        PEN, HIGHLIGHTER, ERASER, TEXT
-    }
-    private var currentTool: Tool = Tool.PEN
     private lateinit var annotationCanvas: AnnotationCanvasView
     private lateinit var btnPen: ImageButton
     private lateinit var btnHighlighter: ImageButton
     private lateinit var btnText: ImageButton
     private lateinit var btnEraser: ImageButton
     private lateinit var btnUndo: ImageButton
+    private lateinit var btnToggleSeekBar: ImageButton
+
+    private var currentTool: Tool? = null
+    private var isSeekBarActive = true
+
+    private val PICK_PDF_FILE = 1001
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -50,37 +53,83 @@ class MainActivity : AppCompatActivity() {
         seekBar = findViewById(R.id.pageSeekBar)
         thumbnailContainer = findViewById(R.id.thumbnail_container)
 
+        annotationCanvas = findViewById(R.id.annotationCanvas)
         btnToggleSeekBar = findViewById(R.id.btnToggleSeekBar)
+        btnPen = findViewById(R.id.btnPen)
+        btnHighlighter = findViewById(R.id.btnHighlighter)
+        btnText = findViewById(R.id.btnText)
+        btnEraser = findViewById(R.id.btnEraser)
+        btnUndo = findViewById(R.id.btnUndo)
+
         btnToggleSeekBar.setOnClickListener {
             isSeekBarActive = !isSeekBarActive
             pageBar?.setSeekBarActive(isSeekBarActive)
-
             val icon = if (isSeekBarActive)
                 R.drawable.baseline_toggle_on_24
             else
                 R.drawable.baseline_toggle_off_24
-
             btnToggleSeekBar.setImageResource(icon)
         }
-        val annotationCanvas = findViewById<AnnotationCanvasView>(R.id.annotationCanvas)
-        var currentTool = Tool.PEN
 
-        btnPen.setOnClickListener {
-            currentTool = Tool.PEN
-            annotationCanvas.setTool(currentTool)
+        btnPen.setOnClickListener        { toggleTool(Tool.PEN, btnPen) }
+        btnHighlighter.setOnClickListener{ toggleTool(Tool.HIGHLIGHTER, btnHighlighter) }
+        btnText.setOnClickListener       { toggleTool(Tool.TEXT, btnText) }
+        btnEraser.setOnClickListener     { toggleTool(Tool.ERASER, btnEraser) }
+        btnUndo.setOnClickListener       { annotationCanvas.undoLast() }
+
+        annotationCanvas.onTextTapListener = { x, y ->
+            thumbnailContainer.findViewWithTag<EditText>("inlineEdit")?.let {
+                thumbnailContainer.removeView(it)
+            }
+            val edit = EditText(this).apply {
+                tag = "inlineEdit"
+                setBackgroundResource(android.R.drawable.edit_text)
+                setSingleLine(true)
+                imeOptions = EditorInfo.IME_ACTION_DONE
+                setTextColor(Color.BLACK)
+                setOnEditorActionListener { v, actionId, _ ->
+                    if (actionId == EditorInfo.IME_ACTION_DONE) {
+                        annotationCanvas.addText(v.text.toString(), x, y)
+                        thumbnailContainer.removeView(v)
+                        true
+                    } else false
+                }
+            }
+            val params = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            ).apply {
+                leftMargin = x.toInt()
+                topMargin  = y.toInt()
+            }
+            thumbnailContainer.addView(edit, params)
+            edit.requestFocus()
+            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.showSoftInput(edit, InputMethodManager.SHOW_IMPLICIT)
         }
-        btnHighlighter.setOnClickListener {
-            currentTool = Tool.HIGHLIGHTER
-            annotationCanvas.setTool(currentTool)
-        }
-        btnEraser.setOnClickListener {
-            currentTool = Tool.ERASER
-            annotationCanvas.setTool(currentTool)
-        }
-        btnUndo.setOnClickListener {
-            annotationCanvas.undoLastStroke()
-        }
+
         openFilePicker()
+    }
+
+    private fun toggleTool(tool: Tool, button: ImageButton) {
+        if (currentTool == tool) {
+            currentTool = null
+            annotationCanvas.setTool(null)
+            clearAllButtonHighlights()
+            button.alpha = 1f
+        } else {
+            clearAllButtonHighlights()
+            currentTool = tool
+            annotationCanvas.setTool(tool)
+            button.alpha = 0.5f
+        }
+    }
+
+    private fun clearAllButtonHighlights() {
+        btnPen.alpha = 1f
+        btnHighlighter.alpha = 1f
+        btnText.alpha = 1f
+        btnEraser.alpha = 1f
     }
 
     private fun openFilePicker() {
@@ -117,17 +166,14 @@ class MainActivity : AppCompatActivity() {
         pdfManager.open(pdfFile.absolutePath)
         val count = pdfManager.pageCount()
 
-        // 뷰페이저 & 어댑터
         viewPager.adapter = PDFPagerAdapter(pdfManager, count)
 
-        // seekbar + PageBar 초기화
         pageBar = PageBar(pdfManager, count).also {
             it.initializeSeekBar(seekBar)
             it.onPageSelected = { page -> viewPager.setCurrentItem(page, true) }
             it.onThumbnailRequested = { bm, x, y -> handleThumbnailRequest(bm, x, y) }
         }
 
-        // ViewPager → SeekBar 동기화
         viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 seekBar.progress = position
@@ -158,14 +204,5 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         pdfManager.close()
     }
-
-    override fun onOptionsItemSelected(item: MenuItem): Boolean =
-        when (item.itemId) {
-            android.R.id.home -> {
-                openFilePicker()
-                true
-            }
-            else -> super.onOptionsItemSelected(item)
-        }
 }
 

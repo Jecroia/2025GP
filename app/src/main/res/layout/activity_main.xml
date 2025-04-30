@@ -1,117 +1,112 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
+<androidx.constraintlayout.widget.ConstraintLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app   ="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
-    android:layout_width="match_parent"
+    android:layout_width ="match_parent"
     android:layout_height="match_parent"
     tools:context=".MainActivity">
 
     <!-- 툴바 -->
     <androidx.appcompat.widget.Toolbar
-        android:id="@+id/toolbar"
-        android:layout_width="match_parent"
+        android:id       ="@+id/toolbar"
+        android:layout_width ="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background="?attr/colorPrimary"
-        app:popupTheme="@style/ThemeOverlay.AppCompat.Light">
+        android:background   ="?attr/colorPrimary"
+        android:elevation    ="8dp"
+        app:popupTheme       ="@style/ThemeOverlay.AppCompat.Light">
 
         <ImageButton
-            android:id="@+id/btnToggleSeekBar"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="end"
-            android:background="@android:color/transparent"
-            android:src="@drawable/baseline_toggle_off_24"
-            android:contentDescription="토글"
-            android:padding="8dp"/>
+            android:id             ="@+id/btnToggleSeekBar"
+            android:layout_width   ="wrap_content"
+            android:layout_height  ="wrap_content"
+            android:layout_gravity ="end"
+            android:background      ="@android:color/transparent"
+            android:padding         ="8dp"
+            android:src             ="@drawable/baseline_toggle_off_24"
+            android:contentDescription="토글"/>
 
-        <!-- 펜 -->
         <ImageButton
-            android:id="@+id/btnPen"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:src="@drawable/tool_pen_24"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="펜" />
+            android:id            ="@+id/btnPen"
+            android:layout_width  ="wrap_content"
+            android:layout_height ="match_parent"
+            android:src           ="@drawable/tool_pen_24"
+            android:background    ="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="펜"/>
 
-        <!-- 형광펜 -->
         <ImageButton
-            android:id="@+id/btnHighlighter"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:src="@drawable/tool_highlight_24"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="형광펜" />
+            android:id            ="@+id/btnHighlighter"
+            android:layout_width  ="wrap_content"
+            android:layout_height ="match_parent"
+            android:src           ="@drawable/tool_highlight_24"
+            android:background    ="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="형광펜"/>
 
-        <!-- 텍스트 -->
         <ImageButton
-            android:id="@+id/btnText"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:src="@drawable/tool_text_24"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="텍스트" />
+            android:id            ="@+id/btnText"
+            android:layout_width  ="wrap_content"
+            android:layout_height ="match_parent"
+            android:src           ="@drawable/tool_text_24"
+            android:background    ="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="텍스트"/>
 
-        <!-- 지우개 -->
         <ImageButton
-            android:id="@+id/btnEraser"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:src="@drawable/tool_eraser_24"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="지우개" />
+            android:id            ="@+id/btnEraser"
+            android:layout_width  ="wrap_content"
+            android:layout_height ="match_parent"
+            android:src           ="@drawable/tool_eraser_24"
+            android:background    ="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="지우개"/>
 
-        <!-- 되돌리기 -->
         <ImageButton
-            android:id="@+id/btnUndo"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:src="@drawable/tool_undo_24"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="되돌리기" />
+            android:id            ="@+id/btnUndo"
+            android:layout_width  ="wrap_content"
+            android:layout_height ="match_parent"
+            android:src           ="@drawable/tool_undo_24"
+            android:background    ="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="되돌리기"/>
 
     </androidx.appcompat.widget.Toolbar>
 
-    <!-- PDF 뷰 영역 -->
-    <androidx.viewpager2.widget.ViewPager2
-        android:id="@+id/viewPager"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
-        android:background="#FFFFFF"
-        app:layout_constraintTop_toBottomOf="@id/pageSeekBar"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"/>
-
-       <!-- 캔버스 오버레이: 필기용 CustomView -->
-       <com.example.scoreviewer.AnnotationCanvasView
-           android:id="@+id/annotationCanvas"
-           android:layout_width="match_parent"
-           android:layout_height="match_parent"
-           android:clickable="true"
-           android:focusable="true"/>
-
     <!-- 하단 페이지 탐색 SeekBar -->
     <SeekBar
-        android:id="@+id/pageSeekBar"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:id              ="@+id/pageSeekBar"
+        android:layout_width    ="0dp"
+        android:layout_height   ="wrap_content"
         android:layout_marginTop="8dp"
         android:layout_marginBottom="8dp"
-        android:background="#FFB6C1"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
+        android:background      ="#FFB6C1"
+        android:elevation       ="8dp"
         app:layout_constraintTop_toBottomOf="@id/toolbar"
-        app:layout_constraintBottom_toTopOf="@id/viewPager" />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/viewPager"/>
 
-    <!-- 오버레이 썸네일 컨테이너 -->
+    <!-- PDF 뷰어 -->
+    <androidx.viewpager2.widget.ViewPager2
+        android:id             ="@+id/viewPager"
+        android:layout_width   ="0dp"
+        android:layout_height  ="0dp"
+        android:background     ="#FFFFFF"
+        app:layout_constraintTop_toBottomOf   ="@id/pageSeekBar"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf ="parent"
+        app:layout_constraintEnd_toEndOf     ="parent"/>
+
+    <!-- 필기 오버레이 Canvas -->
+    <com.example.scoreviewer.AnnotationCanvasView
+        android:id            ="@+id/annotationCanvas"
+        android:layout_width  ="match_parent"
+        android:layout_height ="match_parent"
+        android:clickable     ="true"
+        android:focusable     ="true"/>
+
+    <!-- 썸네일/Inline-EditText 컨테이너 -->
     <FrameLayout
-        android:id="@+id/thumbnail_container"
-        android:layout_width="match_parent"
+        android:id           ="@+id/thumbnail_container"
+        android:layout_width ="match_parent"
         android:layout_height="match_parent"
-        android:clickable="false"
-        android:focusable="false"
-        android:clipChildren="false"
+        android:clipChildren ="false"
         android:clipToPadding="false"/>
-
 
 </androidx.constraintlayout.widget.ConstraintLayout>
