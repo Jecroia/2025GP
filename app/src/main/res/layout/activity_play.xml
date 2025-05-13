@@ -13,7 +13,19 @@
         android:background="?attr/colorPrimary"
         app:title="재생"
         app:titleTextColor="@android:color/white"
-        app:layout_constraintTop_toTopOf="parent"/>
+        app:layout_constraintTop_toTopOf="parent">
+
+        <!-- 오른쪽 정렬 아이콘 -->
+        <ImageButton
+            android:id="@+id/btnSelectMidi"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_gravity="end"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:padding="8dp"
+            android:src="@drawable/ic_folder_24"
+            android:contentDescription="MIDI 선택" />
+    </androidx.appcompat.widget.Toolbar>
 
     <!-- 재생바 + 시간 -->
     <LinearLayout
@@ -47,7 +59,75 @@
             android:max="100"
             android:progressDrawable="@drawable/seekbar_progress_dark"
             android:thumb="@drawable/seekbar_thumb"
-            android:layout_gravity="center_vertical" />
+            android:layout_gravity="center_vertical"
+            />
     </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/controlBar"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="5dp"
+        android:gravity="center_vertical"
+        app:layout_constraintTop_toBottomOf="@id/playBarContainer"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
+
+        <ImageButton
+            android:id="@+id/btnPlay"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_play_arrow_24"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="재생" />
+
+        <ImageButton
+            android:id="@+id/btnStop"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_stop_24"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="정지" />
+
+        <ImageButton
+            android:id="@+id/btnRewind"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_skip_previous_24"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="처음으로" />
+
+        <ImageButton
+            android:id="@+id/btnForward"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_skip_next_24"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="마지막으로" />
+
+        <!-- 볼륨 조절 -->
+        <SeekBar
+            android:id="@+id/volumeSeekBar"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="150dp"
+            android:layout_weight="1"
+            android:maxWidth="100dp"
+            android:max="100"
+            android:progress="50" />
+    </LinearLayout>
+
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/viewPager"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="#FFFFFF"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintHorizontal_bias="1.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/controlBar"
+        app:layout_constraintVertical_bias="1.0" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

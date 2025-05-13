@@ -7,8 +7,8 @@ import android.graphics.Bitmap
 import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
-import android.view.inputmethod.InputMethodManager
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
@@ -39,6 +39,8 @@ class MainActivity : AppCompatActivity() {
 
     private var currentTool: Tool? = null
     private var isSeekBarActive = true
+    private var currentPdfFile: File? = null
+    private var currentMidiFile: File? = null
 
     private val PICK_PDF_FILE = 1001
 
@@ -70,6 +72,20 @@ class MainActivity : AppCompatActivity() {
             else
                 R.drawable.baseline_toggle_off_24
             btnToggleSeekBar.setImageResource(icon)
+        }
+
+        btnPlay = findViewById(R.id.btnPlay)
+        btnPlay.setOnClickListener {
+            currentPdfFile?.let {
+                val intent = Intent(this, PlayActivity::class.java).apply {
+                    putExtra("pdfPath", it.absolutePath)
+                    putExtra("currentPage", viewPager.currentItem)
+                    currentMidiFile?.let { midi ->
+                        putExtra("midiPath", midi.absolutePath)
+                    }
+                }
+                startActivity(intent)
+            }
         }
 
         btnPen.setOnClickListener        { toggleTool(Tool.PEN, btnPen) }
@@ -164,6 +180,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openPdf(pdfFile: File) {
+
+        currentPdfFile = pdfFile
+        pdfManager.open(pdfFile.absolutePath)
+
         pdfManager.open(pdfFile.absolutePath)
         val count = pdfManager.pageCount()
 
@@ -180,6 +200,13 @@ class MainActivity : AppCompatActivity() {
                 seekBar.progress = position
             }
         })
+        //동일 이름 MIDI 파일 존재 시 자동 연결
+        val midiFile = File(pdfFile.parentFile, pdfFile.nameWithoutExtension + ".mid")
+        if (midiFile.exists()) {
+            currentMidiFile = midiFile
+        }
+
+
     }
 
     private fun handleThumbnailRequest(bitmap: Bitmap, x: Int, y: Int) {
@@ -200,7 +227,10 @@ class MainActivity : AppCompatActivity() {
             fragThumbnail?.updateThumbnail(bitmap, x, y)
         }
     }
-
+    override fun onSupportNavigateUp(): Boolean {
+        openFilePicker()
+        return true
+    }
     override fun onDestroy() {
         super.onDestroy()
         pdfManager.close()
