@@ -34,6 +34,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnText: ImageButton
     private lateinit var btnEraser: ImageButton
     private lateinit var btnUndo: ImageButton
+    private lateinit var btnRedo: ImageButton
+
     private lateinit var btnToggleSeekBar: ImageButton
 
     private var currentTool: Tool? = null
@@ -60,6 +62,7 @@ class MainActivity : AppCompatActivity() {
         btnText = findViewById(R.id.btnText)
         btnEraser = findViewById(R.id.btnEraser)
         btnUndo = findViewById(R.id.btnUndo)
+        btnRedo = findViewById(R.id.btnRedo)
 
         btnToggleSeekBar.setOnClickListener {
             isSeekBarActive = !isSeekBarActive
@@ -76,6 +79,7 @@ class MainActivity : AppCompatActivity() {
         btnText.setOnClickListener       { toggleTool(Tool.TEXT, btnText) }
         btnEraser.setOnClickListener     { toggleTool(Tool.ERASER, btnEraser) }
         btnUndo.setOnClickListener       { annotationCanvas.undoLast() }
+        btnRedo.setOnClickListener       { annotationCanvas.redoLast() }
 
         annotationCanvas.onTextTapListener = { x, y ->
             thumbnailContainer.findViewWithTag<EditText>("inlineEdit")?.let {

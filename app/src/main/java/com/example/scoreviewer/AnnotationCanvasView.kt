@@ -23,6 +23,8 @@ class AnnotationCanvasView @JvmOverloads constructor(
     }
 
     private val strokeHistory = mutableListOf<Stroke>()
+    private val redoStack = mutableListOf<Stroke>()
+
     private var currentTool: Tool? = null
 
     /** 툴 설정 */
@@ -33,13 +35,21 @@ class AnnotationCanvasView @JvmOverloads constructor(
     /** 마지막 어노테이션 되돌리기 */
     fun undoLast(): Boolean =
         if (strokeHistory.isNotEmpty()) {
-            strokeHistory.removeAt(strokeHistory.lastIndex)
+            redoStack.add(strokeHistory.removeAt(strokeHistory.lastIndex))
+            invalidate()
+            true
+        } else false
+
+    fun redoLast(): Boolean =
+        if (redoStack.isNotEmpty()){
+            strokeHistory.add(redoStack.removeAt(strokeHistory.lastIndex))
             invalidate()
             true
         } else false
 
     /** 텍스트 추가 */
     fun addText(text: String, x: Float, y: Float) {
+        redoStack.clear()
         val paint = makePaintFor(Tool.TEXT)
         strokeHistory.add(Stroke.TextStroke(text, x, y, paint))
         invalidate()
@@ -61,6 +71,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
     private fun handleDraw(ev: MotionEvent, tool: Tool, x: Float, y: Float) {
         when (ev.action) {
             MotionEvent.ACTION_DOWN -> {
+                redoStack.clear()
                 val paint = makePaintFor(tool)
                 val path = Path().apply { moveTo(x, y) }
                 strokeHistory.add(Stroke.PathStroke(path, paint, mutableListOf(PointF(x, y))))
@@ -76,6 +87,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
 
     private fun handleErase(ev: MotionEvent, x: Float, y: Float) {
         if (ev.action == MotionEvent.ACTION_DOWN || ev.action == MotionEvent.ACTION_MOVE) {
+            redoStack.clear()
             var erased = false
             val iter = strokeHistory.iterator()
             while (iter.hasNext()) {
@@ -155,4 +167,3 @@ class AnnotationCanvasView @JvmOverloads constructor(
         return hypot(px - projX, py - projY)
     }
 }
-
