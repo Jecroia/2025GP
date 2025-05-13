@@ -10,6 +10,8 @@ import kotlin.math.hypot
 /** 도구 종류 */
 enum class Tool { PEN, HIGHLIGHTER, ERASER, TEXT }
 
+private enum class ActionType { ADD, REMOVE }
+
 class AnnotationCanvasView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
 ) : View(context, attrs) {
@@ -23,7 +25,8 @@ class AnnotationCanvasView @JvmOverloads constructor(
     }
 
     private val strokeHistory = mutableListOf<Stroke>()
-    private val redoStack = mutableListOf<Stroke>()
+    private val actionStack = mutableListOf<Pair<Stroke, ActionType>>()
+    private val redoStack   = mutableListOf<Pair<Stroke, ActionType>>()
 
     private var currentTool: Tool? = null
 
@@ -33,30 +36,37 @@ class AnnotationCanvasView @JvmOverloads constructor(
     }
 
     /** 마지막 어노테이션 되돌리기 */
-    fun undoLast(): Boolean =
-        if (strokeHistory.isNotEmpty()) {
-            val removed = strokeHistory.removeAt(strokeHistory.lastIndex)
-            redoStack.add(removed)
-            invalidate()
-            true
-        } else false
+    fun undoLast(): Boolean {
+        if (actionStack.isEmpty()) return false
+        val (stroke, type) = actionStack.removeAt(actionStack.lastIndex)
+        when (type) {
+            ActionType.ADD    -> strokeHistory.remove(stroke)
+            ActionType.REMOVE -> strokeHistory.add(stroke)
+        }
+        redoStack.add(stroke to type)
+        invalidate()
+        return true
+    }
 
     fun redoLast(): Boolean {
-        if (redoStack.isNotEmpty()) {
-            val idx = redoStack.lastIndex
-            val stroke = redoStack.removeAt(idx)
-            strokeHistory.add(stroke)
-            invalidate()
-            return true
+        if (redoStack.isEmpty()) return false
+        val (stroke, type) = redoStack.removeAt(redoStack.lastIndex)
+        when (type) {
+            ActionType.ADD    -> strokeHistory.add(stroke)
+            ActionType.REMOVE -> strokeHistory.remove(stroke)
         }
-        return false
+        actionStack.add(stroke to type)
+        invalidate()
+        return true
     }
 
     /** 텍스트 추가 */
     fun addText(text: String, x: Float, y: Float) {
         redoStack.clear()
         val paint = makePaintFor(Tool.TEXT)
-        strokeHistory.add(Stroke.TextStroke(text, x, y, paint))
+        val newStroke = Stroke.TextStroke(text, x, y, paint)
+        strokeHistory.add(newStroke)
+        actionStack.add(newStroke to ActionType.ADD)
         invalidate()
     }
 
@@ -78,8 +88,10 @@ class AnnotationCanvasView @JvmOverloads constructor(
             MotionEvent.ACTION_DOWN -> {
                 redoStack.clear()
                 val paint = makePaintFor(tool)
-                val path = Path().apply { moveTo(x, y) }
-                strokeHistory.add(Stroke.PathStroke(path, paint, mutableListOf(PointF(x, y))))
+                val path  = Path().apply { moveTo(x, y) }
+                val newStroke = Stroke.PathStroke(path, paint, mutableListOf(PointF(x, y)))
+                strokeHistory.add(newStroke)
+                actionStack.add(newStroke to ActionType.ADD)
             }
             MotionEvent.ACTION_MOVE -> (strokeHistory.lastOrNull() as? Stroke.PathStroke)?.let {
                 it.path.lineTo(x, y)
@@ -95,11 +107,13 @@ class AnnotationCanvasView @JvmOverloads constructor(
             redoStack.clear()
             var erased = false
             val iter = strokeHistory.iterator()
+            val removed = mutableListOf<Stroke>()
             while (iter.hasNext()) {
                 when (val s = iter.next()) {
                     is Stroke.PathStroke ->
                         if (intersectsPath(s.points, x, y, s.paint.strokeWidth)) {
                             iter.remove()
+                            removed.add(s)
                             erased = true
                         }
                     is Stroke.TextStroke -> {
@@ -111,12 +125,16 @@ class AnnotationCanvasView @JvmOverloads constructor(
                         )
                         if (bounds.contains(x, y)) {
                             iter.remove()
+                            removed.add(s)
                             erased = true
                         }
                     }
                 }
             }
-            if (erased) invalidate()
+            if (erased) {
+                removed.forEach { actionStack.add(it to ActionType.REMOVE) }
+                invalidate()
+            }
         }
     }
 
@@ -131,7 +149,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
     }
 
     private fun makePaintFor(tool: Tool): Paint = Paint().apply {
-        style      = if (tool == Tool.TEXT) Paint.Style.FILL else Paint.Style.STROKE
+        style       = if (tool == Tool.TEXT) Paint.Style.FILL else Paint.Style.STROKE
         isAntiAlias = true
         strokeWidth = when (tool) {
             Tool.PEN         -> 5f
@@ -161,9 +179,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
         return false
     }
 
-    private fun distancePointToSegment(px: Float, py: Float,
-                                       x1: Float, y1: Float,
-                                       x2: Float, y2: Float): Float {
+    private fun distancePointToSegment(px: Float, py: Float, x1: Float, y1: Float, x2: Float, y2: Float): Float {
         val dx = x2 - x1; val dy = y2 - y1
         if (dx == 0f && dy == 0f) return hypot(px - x1, py - y1)
         val t = ((px - x1) * dx + (py - y1) * dy) / (dx*dx + dy*dy)
