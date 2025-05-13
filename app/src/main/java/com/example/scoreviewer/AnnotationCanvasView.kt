@@ -35,17 +35,22 @@ class AnnotationCanvasView @JvmOverloads constructor(
     /** 마지막 어노테이션 되돌리기 */
     fun undoLast(): Boolean =
         if (strokeHistory.isNotEmpty()) {
-            redoStack.add(strokeHistory.removeAt(strokeHistory.lastIndex))
+            val removed = strokeHistory.removeAt(strokeHistory.lastIndex)
+            redoStack.add(removed)
             invalidate()
             true
         } else false
 
-    fun redoLast(): Boolean =
-        if (redoStack.isNotEmpty()){
-            strokeHistory.add(redoStack.removeAt(strokeHistory.lastIndex))
+    fun redoLast(): Boolean {
+        if (redoStack.isNotEmpty()) {
+            val idx = redoStack.lastIndex
+            val stroke = redoStack.removeAt(idx)
+            strokeHistory.add(stroke)
             invalidate()
-            true
-        } else false
+            return true
+        }
+        return false
+    }
 
     /** 텍스트 추가 */
     fun addText(text: String, x: Float, y: Float) {
