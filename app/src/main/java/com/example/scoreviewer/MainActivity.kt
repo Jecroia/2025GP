@@ -35,6 +35,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnEraser: ImageButton
     private lateinit var btnUndo: ImageButton
     private lateinit var btnToggleSeekBar: ImageButton
+    private lateinit var btnPlay: ImageButton
 
     private var currentTool: Tool? = null
     private var isSeekBarActive = true
