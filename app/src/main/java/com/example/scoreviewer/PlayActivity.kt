@@ -147,7 +147,15 @@ class PlayActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(sb: SeekBar?) {}
         })
 
-        if (savedPage != -1 && savedMillis != -1 && savedPdfPath != null && savedMidiPath != null) {
+        val shouldRestore = (
+                savedPage != -1 &&
+                        savedMillis != -1 &&
+                        !(savedPage == 0 && savedMillis == 0) &&
+                        savedPdfPath != null &&
+                        savedMidiPath != null
+                )
+
+        if (shouldRestore) {
             AlertDialog.Builder(this)
                 .setTitle("이전 세션 복원")
                 .setMessage("페이지 ${savedPage + 1}, 시간 ${formatMillis(savedMillis.toLong())}로 복원하시겠습니까?")
