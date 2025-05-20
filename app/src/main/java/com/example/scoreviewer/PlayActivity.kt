@@ -93,6 +93,10 @@ class PlayActivity : AppCompatActivity() {
         val volumeSeekBar = findViewById<SeekBar>(R.id.volumeSeekBar)
 
         btnPlay.setOnClickListener {
+            if (midiPath == null) {
+                Toast.makeText(this, "MIDI 파일을 먼저 선택하세요", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
             if (!isPlaying && totalMillis > 0) {
                 window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 startPlaybackSimulation()
@@ -167,6 +171,16 @@ class PlayActivity : AppCompatActivity() {
                 }
                 .setNegativeButton("아니오", null)
                 .show()
+        }
+        if (midiPath == null) {
+            // MIDI가 없으면 선택 창 열기
+            val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "*/*"
+                putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("audio/midi", "audio/mid", "audio/x-midi"))
+            }
+            Toast.makeText(this, "연결된 MIDI 파일이 없습니다. 파일을 선택해주세요.", Toast.LENGTH_SHORT).show()
+            startActivityForResult(intent, PICK_MIDI_FILE)
         }
     }
 

@@ -3,12 +3,13 @@ package com.example.scoreviewer
 import android.graphics.Bitmap
 import android.util.LruCache
 import android.view.MotionEvent
-import android.widget.SeekBar
 import android.view.View
+import android.widget.SeekBar
 import com.artifex.mupdf.fitz.ColorSpace
 import com.artifex.mupdf.fitz.Matrix
 
 class PageBar(
+
     private val pdfManager: PdfManager,
     private val pageCount: Int
 ) {
@@ -19,11 +20,13 @@ class PageBar(
     private var isLongPress = false
     private var longPressRunnable: Runnable? = null
     private val longPressThreshold = 300L
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private var pendingThumbnailPage: Int? = null
 
     // 캐시: 최대 메모리 1/8 크기 (KB 단위)
     private val thumbnailCache: LruCache<Int, Bitmap> = run {
         val maxKb = (Runtime.getRuntime().maxMemory() / 1024).toInt()
-        LruCache(maxKb / 8)
+        LruCache(maxKb / 4)
     }
 
     fun initializeSeekBar(sb: SeekBar) {
@@ -82,8 +85,23 @@ class PageBar(
     }
 
     private fun updateThumbnail(pageIndex: Int) {
-        val bitmap = thumbnailCache.get(pageIndex)
-            ?: renderAndCache(pageIndex)
+        val cached = thumbnailCache.get(pageIndex)
+        if (cached != null) {
+            showThumbnail(cached, pageIndex)
+            return
+        }
+
+        // 중복 요청 방지
+        pendingThumbnailPage = pageIndex
+
+        handler.postDelayed({
+            if (pendingThumbnailPage != pageIndex) return@postDelayed  // 최신 요청 아니면 무시
+            val rendered = renderAndCache(pageIndex)
+            showThumbnail(rendered, pageIndex)
+        }, 50)
+    }
+
+    private fun showThumbnail(bitmap: Bitmap, pageIndex: Int) {
         seekBar?.let { sb ->
             val loc = IntArray(2).also { sb.getLocationOnScreen(it) }
             val x = calculateThumbXFromProgress(sb, pageIndex)

@@ -181,16 +181,24 @@ class MainActivity : AppCompatActivity() {
 
     private fun openPdf(pdfFile: File) {
 
+        viewPager.offscreenPageLimit = 1
         currentPdfFile = pdfFile
         pdfManager.open(pdfFile.absolutePath)
         val count = pdfManager.pageCount()
 
         viewPager.adapter = PDFPagerAdapter(pdfManager, count)
 
+        val prefs = getSharedPreferences("PlaybackPrefs", MODE_PRIVATE)
+        prefs.edit().putString("last_pdf", pdfFile.absolutePath).apply()
+
         pageBar = PageBar(pdfManager, count).also {
             it.initializeSeekBar(seekBar)
             it.onPageSelected = { page -> viewPager.setCurrentItem(page, true) }
             it.onThumbnailRequested = { bm, x, y -> handleThumbnailRequest(bm, x, y) }
+            //seekbar false : default
+            isSeekBarActive = false
+            it.setSeekBarActive(false)
+            btnToggleSeekBar.setImageResource(R.drawable.baseline_toggle_off_24)
         }
 
         viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
@@ -199,9 +207,12 @@ class MainActivity : AppCompatActivity() {
             }
         })
         //동일 이름 MIDI 파일 존재 시 자동 연결
+        currentMidiFile = null //초기화
         val midiFile = File(pdfFile.parentFile, pdfFile.nameWithoutExtension + ".mid")
         if (midiFile.exists()) {
             currentMidiFile = midiFile
+        }else {
+            prefs.edit().remove("last_midi").apply()
         }
 
 
@@ -223,6 +234,18 @@ class MainActivity : AppCompatActivity() {
                     .commitAllowingStateLoss()
             }
             fragThumbnail?.updateThumbnail(bitmap, x, y)
+        }
+    }
+    override fun onResume() {
+        super.onResume()
+
+        val prefs = getSharedPreferences("PlaybackPrefs", MODE_PRIVATE)
+        val savedPage = prefs.getInt("last_page", -1)
+        val savedPdfPath = prefs.getString("last_pdf", null)
+
+        if (savedPage != -1 && savedPdfPath != null && currentPdfFile?.absolutePath == savedPdfPath) {
+            viewPager.setCurrentItem(savedPage, false)
+            seekBar.progress = savedPage
         }
     }
     override fun onSupportNavigateUp(): Boolean {
