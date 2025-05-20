@@ -26,21 +26,19 @@ class AnnotationCanvasView @JvmOverloads constructor(
     private val pageToActionStack = mutableMapOf<Int, MutableList<Pair<Stroke, ActionType>>>()
     private val pageToRedoStack   = mutableMapOf<Int, MutableList<Pair<Stroke, ActionType>>>()
 
-    /** 텍스트 터치 좌표 콜백 */
     var onTextTapListener: ((Float, Float) -> Unit)? = null
     private var currentTool: Tool? = null
 
-    /** ▶ 변경 2: setPage 메서드 추가 */
     fun setPage(page: Int) {
         // 페이지 전환 시 히스토리·스택 초기화 없이 해당 페이지만 다시 그리기
         currentPage = page
         invalidate()
     }
 
-    /** 툴 설정 (변경 없음) */
+    /** 툴 설정 */
     fun setTool(tool: Tool?) { currentTool = tool }
 
-    /** ▶ 변경 3: undo/redo도 페이지별로 작동하도록 수정 */
+    /** undo/redo도 페이지별로 작동하도록 수정 */
     fun undoLast(): Boolean {
         val actionStack = pageToActionStack.getOrPut(currentPage) { mutableListOf() }
         val history     = pageToHistory    .getOrPut(currentPage) { mutableListOf() }
@@ -73,7 +71,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
         return true
     }
 
-    /** ▶ 변경 4: addText도 페이지별로 저장 */
+    /** addText도 페이지별로 저장 */
     fun addText(text: String, x: Float, y: Float) {
         val history   = pageToHistory   .getOrPut(currentPage) { mutableListOf() }
         val actionStack = pageToActionStack.getOrPut(currentPage) { mutableListOf() }
@@ -90,7 +88,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
         val tool = currentTool ?: return false  // PDF 스크롤 방지를 위한 기존 로직
         val x = ev.x; val y = ev.y
 
-        // ▶ 변경 5: 각 페이지별 리스트를 미리 얻어 둡니다
+        /**각 페이지별 리스트를 미리 오픈 */
         val history     = pageToHistory   .getOrPut(currentPage) { mutableListOf() }
         val actionStack = pageToActionStack.getOrPut(currentPage) { mutableListOf() }
         pageToRedoStack[currentPage]?.clear()
@@ -158,7 +156,6 @@ class AnnotationCanvasView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        // ▶ 변경 6: 현재 페이지의 히스토리만 그립니다
         pageToHistory[currentPage]?.forEach {
             when (it) {
                 is Stroke.PathStroke -> canvas.drawPath(it.path, it.paint)
