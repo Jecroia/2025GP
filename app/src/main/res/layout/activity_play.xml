@@ -83,6 +83,14 @@
             android:contentDescription="재생" />
 
         <ImageButton
+            android:id="@+id/btnPause"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:src="@drawable/ic_pause_24"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="일시정지" />
+
+        <ImageButton
             android:id="@+id/btnStop"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

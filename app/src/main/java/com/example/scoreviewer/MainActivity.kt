@@ -183,8 +183,6 @@ class MainActivity : AppCompatActivity() {
 
         currentPdfFile = pdfFile
         pdfManager.open(pdfFile.absolutePath)
-
-        pdfManager.open(pdfFile.absolutePath)
         val count = pdfManager.pageCount()
 
         viewPager.adapter = PDFPagerAdapter(pdfManager, count)

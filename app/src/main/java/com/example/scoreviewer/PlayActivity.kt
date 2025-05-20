@@ -26,6 +26,12 @@ class PlayActivity : AppCompatActivity() {
     private var totalMillis = 0
     private lateinit var handler: Handler
     private lateinit var updateRunnable: Runnable
+    private lateinit var viewPager: ViewPager2
+    private lateinit var pdfManager: PdfManager
+    private lateinit var midiSeekBar: SeekBar
+    private lateinit var timeText: TextView
+    private var pageCount = 0
+    private var isPaused = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,22 +41,32 @@ class PlayActivity : AppCompatActivity() {
         setSupportActionBar(toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
+        midiSeekBar = findViewById(R.id.midiSeekBar)
+        timeText = findViewById(R.id.txtCurrentTime)
         val pdfPath = intent.getStringExtra("pdfPath")
         val startPage = intent.getIntExtra("currentPage", 0)
+        viewPager = findViewById(R.id.viewPager)
+        pdfManager = PdfManager()
+
+
+        //재생 바 밑 컨트롤 버튼
+        val btnPlay = findViewById<ImageButton>(R.id.btnPlay)
+        val btnPause = findViewById<ImageButton>(R.id.btnPause)
+        val btnStop = findViewById<ImageButton>(R.id.btnStop)
+        val btnRewind = findViewById<ImageButton>(R.id.btnRewind)
+        val btnForward = findViewById<ImageButton>(R.id.btnForward)
+        val volumeSeekBar = findViewById<SeekBar>(R.id.volumeSeekBar)
 
         // PDF 경로 받아오기
         if (pdfPath != null) {
             val pdfManager = PdfManager()
             pdfManager.open(pdfPath)
 
-            val viewPager = findViewById<ViewPager2>(R.id.viewPager)
+            pageCount = pdfManager.pageCount()
             viewPager.adapter = PDFPagerAdapter(pdfManager, pdfManager.pageCount())
             viewPager.setCurrentItem(startPage, false)
         }
-
-        val midiSeekBar = findViewById<SeekBar>(R.id.midiSeekBar)
-        val timeText = findViewById<TextView>(R.id.txtCurrentTime)
-
+        // MIDI 파일 처리
         val midiPath = intent.getStringExtra("midiPath")
         if (midiPath != null) {
             val midiFile = File(midiPath)
@@ -78,41 +94,70 @@ class PlayActivity : AppCompatActivity() {
             }
             startActivityForResult(intent, PICK_MIDI_FILE)
         }
-        //재생 바 밑 컨트롤 버튼
-        val btnPlay = findViewById<ImageButton>(R.id.btnPlay)
-        val btnStop = findViewById<ImageButton>(R.id.btnStop)
-        val btnRewind = findViewById<ImageButton>(R.id.btnRewind)
-        val btnForward = findViewById<ImageButton>(R.id.btnForward)
-        val volumeSeekBar = findViewById<SeekBar>(R.id.volumeSeekBar)
 
         handler = Handler(Looper.getMainLooper())
 
         btnPlay.setOnClickListener {
             if (totalMillis <= 0) {
                 Toast.makeText(this, "먼저 MIDI 파일을 로드하세요", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-            if (!isPlaying) {
+            } else if (!isPlaying) {
                 startPlaybackSimulation(midiSeekBar, timeText)
             } else {
                 Toast.makeText(this, "이미 재생 중입니다", Toast.LENGTH_SHORT).show()
             }
         }
 
+        midiSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    currentMillis = progress  // 핵심: 사용자가 위치 옮기면 시간 갱신
+                    timeText.text =
+                        "${formatMillis(progress.toLong())} / ${formatMillis(totalMillis.toLong())}"
+                    val newPage = (currentMillis.toFloat() / totalMillis * pageCount).toInt()
+                    if (newPage < pageCount) {
+                        viewPager.setCurrentItem(newPage, true)
+                    }
+                }
+            }
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                // 재생 중에는 일시정지할 수도 있음
+                if (isPlaying) stopPlayback()
+            }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                // 사용자가 손을 뗐을 때 다시 재생할지 말지는 원하는 동작에 따라 조정
+                if (!isPlaying && totalMillis > 0) startPlaybackSimulation(midiSeekBar, timeText)
+            }
+        })
+
+        btnPause.setOnClickListener {
+            if (isPlaying) {
+                isPaused = true
+                stopPlayback()
+            }
+        }
+
         btnStop.setOnClickListener {
             stopPlayback()
+            currentMillis = 0
+            midiSeekBar.progress = currentMillis
+            timeText.text = "00:00 / ${formatMillis(totalMillis.toLong())}"
+            viewPager.setCurrentItem(0, true)
         }
 
         btnRewind.setOnClickListener {
-            currentMillis = 0
+            currentMillis = maxOf(0, currentMillis - 10000)
             midiSeekBar.progress = currentMillis
             timeText.text = "${formatMillis(currentMillis.toLong())} / ${formatMillis(totalMillis.toLong())}"
+            viewPager.setCurrentItem((currentMillis.toFloat() / totalMillis * pageCount).toInt(), true)
         }
 
         btnForward.setOnClickListener {
-            currentMillis = totalMillis
+            currentMillis = minOf(totalMillis, currentMillis + 10000)
             midiSeekBar.progress = currentMillis
             timeText.text = "${formatMillis(currentMillis.toLong())} / ${formatMillis(totalMillis.toLong())}"
+            viewPager.setCurrentItem((currentMillis.toFloat() / totalMillis * pageCount).toInt(), true)
         }
 
         volumeSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -129,12 +174,20 @@ class PlayActivity : AppCompatActivity() {
         isPlaying = true
         updateRunnable = object : Runnable {
             override fun run() {
-                if (currentMillis <= totalMillis && isPlaying) {
-                    seekBar.progress = currentMillis
-                    timeText.text = "${formatMillis(currentMillis.toLong())} / ${formatMillis(totalMillis.toLong())}"
-                    currentMillis += 1000
-                    handler.postDelayed(this, 1000)
+                if (currentMillis > totalMillis || !isPlaying) {
+                    stopPlayback()
+                    return
                 }
+                seekBar.progress = currentMillis
+                timeText.text = "${formatMillis(currentMillis.toLong())} / ${formatMillis(totalMillis.toLong())}"
+
+                val nextPage = (currentMillis.toFloat() / totalMillis * pageCount).toInt()
+                if (nextPage < pageCount) {
+                    viewPager.setCurrentItem(nextPage, true)
+                }
+
+                currentMillis += 1000
+                handler.postDelayed(this, 1000)
             }
         }
         handler.post(updateRunnable)
@@ -186,11 +239,8 @@ class PlayActivity : AppCompatActivity() {
                     //초기화
                     totalMillis = durationMillis.toInt()
                     currentMillis = 0
-
-                    val seekBar = findViewById<SeekBar>(R.id.midiSeekBar)
-                    val timeText = findViewById<TextView>(R.id.txtCurrentTime)
-                    seekBar.max = totalMillis
-                    seekBar.progress = currentMillis
+                    midiSeekBar.max = totalMillis
+                    midiSeekBar.progress = currentMillis
                     timeText.text = "00:00 / ${formatMillis(totalMillis.toLong())}"
                 } else {
                     Toast.makeText(this, "MIDI 파일을 불러올 수 없습니다.", Toast.LENGTH_SHORT).show()
