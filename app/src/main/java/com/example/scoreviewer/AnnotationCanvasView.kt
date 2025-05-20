@@ -12,36 +12,45 @@ enum class Tool { PEN, HIGHLIGHTER, ERASER, TEXT }
 
 private enum class ActionType { ADD, REMOVE }
 
+private sealed class Stroke {
+    data class PathStroke(val path: Path, val paint: Paint, val points: MutableList<PointF>) : Stroke()
+    data class TextStroke(val text: String, val x: Float, val y: Float, val paint: Paint) : Stroke()
+}
+
 class AnnotationCanvasView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
 ) : View(context, attrs) {
 
+    private var currentPage: Int = 0
+    private val pageToHistory = mutableMapOf<Int, MutableList<Stroke>>()
+    private val pageToActionStack = mutableMapOf<Int, MutableList<Pair<Stroke, ActionType>>>()
+    private val pageToRedoStack   = mutableMapOf<Int, MutableList<Pair<Stroke, ActionType>>>()
+
     /** 텍스트 터치 좌표 콜백 */
     var onTextTapListener: ((Float, Float) -> Unit)? = null
-
-    private sealed class Stroke {
-        data class PathStroke(val path: Path, val paint: Paint, val points: MutableList<PointF>) : Stroke()
-        data class TextStroke(val text: String, val x: Float, val y: Float, val paint: Paint) : Stroke()
-    }
-
-    private val strokeHistory = mutableListOf<Stroke>()
-    private val actionStack = mutableListOf<Pair<Stroke, ActionType>>()
-    private val redoStack   = mutableListOf<Pair<Stroke, ActionType>>()
-
     private var currentTool: Tool? = null
 
-    /** 툴 설정 */
-    fun setTool(tool: Tool?) {
-        currentTool = tool
+    /** ▶ 변경 2: setPage 메서드 추가 */
+    fun setPage(page: Int) {
+        // 페이지 전환 시 히스토리·스택 초기화 없이 해당 페이지만 다시 그리기
+        currentPage = page
+        invalidate()
     }
 
-    /** 마지막 어노테이션 되돌리기 */
+    /** 툴 설정 (변경 없음) */
+    fun setTool(tool: Tool?) { currentTool = tool }
+
+    /** ▶ 변경 3: undo/redo도 페이지별로 작동하도록 수정 */
     fun undoLast(): Boolean {
+        val actionStack = pageToActionStack.getOrPut(currentPage) { mutableListOf() }
+        val history     = pageToHistory    .getOrPut(currentPage) { mutableListOf() }
+        val redoStack   = pageToRedoStack  .getOrPut(currentPage) { mutableListOf() }
         if (actionStack.isEmpty()) return false
+
         val (stroke, type) = actionStack.removeAt(actionStack.lastIndex)
         when (type) {
-            ActionType.ADD    -> strokeHistory.remove(stroke)
-            ActionType.REMOVE -> strokeHistory.add(stroke)
+            ActionType.ADD    -> history.remove(stroke)
+            ActionType.REMOVE -> history.add(stroke)
         }
         redoStack.add(stroke to type)
         invalidate()
@@ -49,105 +58,114 @@ class AnnotationCanvasView @JvmOverloads constructor(
     }
 
     fun redoLast(): Boolean {
+        val actionStack = pageToActionStack.getOrPut(currentPage) { mutableListOf() }
+        val history     = pageToHistory    .getOrPut(currentPage) { mutableListOf() }
+        val redoStack   = pageToRedoStack  .getOrPut(currentPage) { mutableListOf() }
         if (redoStack.isEmpty()) return false
+
         val (stroke, type) = redoStack.removeAt(redoStack.lastIndex)
         when (type) {
-            ActionType.ADD    -> strokeHistory.add(stroke)
-            ActionType.REMOVE -> strokeHistory.remove(stroke)
+            ActionType.ADD    -> history.add(stroke)
+            ActionType.REMOVE -> history.remove(stroke)
         }
         actionStack.add(stroke to type)
         invalidate()
         return true
     }
 
-    /** 텍스트 추가 */
+    /** ▶ 변경 4: addText도 페이지별로 저장 */
     fun addText(text: String, x: Float, y: Float) {
-        redoStack.clear()
+        val history   = pageToHistory   .getOrPut(currentPage) { mutableListOf() }
+        val actionStack = pageToActionStack.getOrPut(currentPage) { mutableListOf() }
+        pageToRedoStack[currentPage]?.clear()
+
         val paint = makePaintFor(Tool.TEXT)
         val newStroke = Stroke.TextStroke(text, x, y, paint)
-        strokeHistory.add(newStroke)
+        history.add(newStroke)
         actionStack.add(newStroke to ActionType.ADD)
         invalidate()
     }
 
     override fun onTouchEvent(ev: MotionEvent): Boolean {
-        val tool = currentTool ?: return false  // null 이면 PDF 뷰어가 터치를 가져감
+        val tool = currentTool ?: return false  // PDF 스크롤 방지를 위한 기존 로직
         val x = ev.x; val y = ev.y
+
+        // ▶ 변경 5: 각 페이지별 리스트를 미리 얻어 둡니다
+        val history     = pageToHistory   .getOrPut(currentPage) { mutableListOf() }
+        val actionStack = pageToActionStack.getOrPut(currentPage) { mutableListOf() }
+        pageToRedoStack[currentPage]?.clear()
+
         when (tool) {
-            Tool.PEN, Tool.HIGHLIGHTER -> handleDraw(ev, tool, x, y)
-            Tool.ERASER               -> handleErase(ev, x, y)
-            Tool.TEXT                 ->
+            Tool.PEN, Tool.HIGHLIGHTER -> {
+                when (ev.action) {
+                    MotionEvent.ACTION_DOWN -> {
+                        val paint = makePaintFor(tool)
+                        val path  = Path().apply { moveTo(x, y) }
+                        val newStroke = Stroke.PathStroke(path, paint, mutableListOf(PointF(x, y)))
+                        history.add(newStroke)
+                        actionStack.add(newStroke to ActionType.ADD)
+                    }
+                    MotionEvent.ACTION_MOVE -> (history.lastOrNull() as? Stroke.PathStroke)?.let {
+                        it.path.lineTo(x, y)
+                        it.points.add(PointF(x, y))
+                    }
+                    else -> {}
+                }
+                invalidate()
+            }
+
+            Tool.ERASER -> {
+                if (ev.action == MotionEvent.ACTION_DOWN || ev.action == MotionEvent.ACTION_MOVE) {
+                    var erased = false
+                    val removed = mutableListOf<Stroke>()
+                    val iter = history.iterator()
+                    while (iter.hasNext()) {
+                        when (val s = iter.next()) {
+                            is Stroke.PathStroke ->
+                                if (intersectsPath(s.points, x, y, s.paint.strokeWidth)) {
+                                    iter.remove()
+                                    removed.add(s)
+                                    erased = true
+                                }
+                            is Stroke.TextStroke -> {
+                                val bounds = RectF(
+                                    s.x,
+                                    s.y - s.paint.textSize,
+                                    s.x + s.paint.measureText(s.text),
+                                    s.y
+                                )
+                                if (bounds.contains(x, y)) {
+                                    iter.remove()
+                                    removed.add(s)
+                                    erased = true
+                                }
+                            }
+                        }
+                    }
+                    if (erased) {
+                        removed.forEach { actionStack.add(it to ActionType.REMOVE) }
+                        invalidate()
+                    }
+                }
+            }
+
+            Tool.TEXT ->
                 if (ev.action == MotionEvent.ACTION_DOWN)
                     onTextTapListener?.invoke(x, y)
         }
         return true
     }
 
-    private fun handleDraw(ev: MotionEvent, tool: Tool, x: Float, y: Float) {
-        when (ev.action) {
-            MotionEvent.ACTION_DOWN -> {
-                redoStack.clear()
-                val paint = makePaintFor(tool)
-                val path  = Path().apply { moveTo(x, y) }
-                val newStroke = Stroke.PathStroke(path, paint, mutableListOf(PointF(x, y)))
-                strokeHistory.add(newStroke)
-                actionStack.add(newStroke to ActionType.ADD)
-            }
-            MotionEvent.ACTION_MOVE -> (strokeHistory.lastOrNull() as? Stroke.PathStroke)?.let {
-                it.path.lineTo(x, y)
-                it.points.add(PointF(x, y))
-            }
-            else -> {}
-        }
-        invalidate()
-    }
-
-    private fun handleErase(ev: MotionEvent, x: Float, y: Float) {
-        if (ev.action == MotionEvent.ACTION_DOWN || ev.action == MotionEvent.ACTION_MOVE) {
-            redoStack.clear()
-            var erased = false
-            val iter = strokeHistory.iterator()
-            val removed = mutableListOf<Stroke>()
-            while (iter.hasNext()) {
-                when (val s = iter.next()) {
-                    is Stroke.PathStroke ->
-                        if (intersectsPath(s.points, x, y, s.paint.strokeWidth)) {
-                            iter.remove()
-                            removed.add(s)
-                            erased = true
-                        }
-                    is Stroke.TextStroke -> {
-                        val bounds = RectF(
-                            s.x,
-                            s.y - s.paint.textSize,
-                            s.x + s.paint.measureText(s.text),
-                            s.y
-                        )
-                        if (bounds.contains(x, y)) {
-                            iter.remove()
-                            removed.add(s)
-                            erased = true
-                        }
-                    }
-                }
-            }
-            if (erased) {
-                removed.forEach { actionStack.add(it to ActionType.REMOVE) }
-                invalidate()
-            }
-        }
-    }
-
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        strokeHistory.forEach {
+        // ▶ 변경 6: 현재 페이지의 히스토리만 그립니다
+        pageToHistory[currentPage]?.forEach {
             when (it) {
                 is Stroke.PathStroke -> canvas.drawPath(it.path, it.paint)
                 is Stroke.TextStroke -> canvas.drawText(it.text, it.x, it.y, it.paint)
             }
         }
     }
-
     private fun makePaintFor(tool: Tool): Paint = Paint().apply {
         style       = if (tool == Tool.TEXT) Paint.Style.FILL else Paint.Style.STROKE
         isAntiAlias = true

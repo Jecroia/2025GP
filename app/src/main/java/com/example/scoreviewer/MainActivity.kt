@@ -181,6 +181,7 @@ class MainActivity : AppCompatActivity() {
         viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
                 seekBar.progress = position
+                annotationCanvas.setPage(position)
             }
         })
     }
