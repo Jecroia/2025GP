@@ -87,8 +87,8 @@ class MainActivity : AppCompatActivity() {
         btnHighlighter.setOnClickListener{ toggleTool(Tool.HIGHLIGHTER, btnHighlighter) }
         btnText.setOnClickListener       { toggleTool(Tool.TEXT, btnText) }
         btnEraser.setOnClickListener     { toggleTool(Tool.ERASER, btnEraser) }
-        btnUndo.setOnClickListener       { annotationCanvas.undoLast() }
-        btnRedo.setOnClickListener       { annotationCanvas.redoLast() }
+        btnUndo.setOnClickListener { handleUndoOrRedo(isUndo = true) }
+        btnRedo.setOnClickListener { handleUndoOrRedo(isUndo = false) }
         btnSave.setOnClickListener       { showSaveDialog() }
 
         annotationCanvas.onTextTapListener = { x, y ->
@@ -289,5 +289,33 @@ class MainActivity : AppCompatActivity() {
         }
         return null
     }
+
+    private fun handleUndoOrRedo(isUndo: Boolean) {
+        val target = if (isUndo) annotationCanvas.peekUndo()
+        else         annotationCanvas.peekRedo()
+
+        if (target == null) return
+
+        val (page, _, _) = target
+        val currentPage = viewPager.currentItem
+
+        if (page != currentPage) {
+            AlertDialog.Builder(this)
+                .setTitle("알림")
+                .setMessage("다른 페이지(${page + 1}p)에서 작성된 필기입니다.")
+                .setNegativeButton("취소", null)
+                .setPositiveButton("실행") { _, _ ->
+                    viewPager.setCurrentItem(page, false)
+                    annotationCanvas.setPage(page)
+                    if (isUndo) annotationCanvas.undoLast()
+                    else        annotationCanvas.redoLast()
+                }
+                .show()
+        } else {
+            if (isUndo) annotationCanvas.undoLast()
+            else        annotationCanvas.redoLast()
+        }
+    }
+
 }
 

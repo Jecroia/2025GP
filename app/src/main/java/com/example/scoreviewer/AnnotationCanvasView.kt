@@ -12,7 +12,7 @@ enum class Tool { PEN, HIGHLIGHTER, ERASER, TEXT }
 
 private enum class ActionType { ADD, REMOVE }
 
-private sealed class Stroke {
+sealed class Stroke {
     data class PathStroke(val path: Path, val paint: Paint, val points: MutableList<PointF>) : Stroke()
     data class TextStroke(val text: String, val x: Float, val y: Float, val paint: Paint) : Stroke()
 }
@@ -66,6 +66,11 @@ class AnnotationCanvasView @JvmOverloads constructor(
         invalidate()
         return true
     }
+    fun peekUndo(): Triple<Int, Stroke, Any>? =
+        globalActionStack.lastOrNull()
+
+    fun peekRedo(): Triple<Int, Stroke, Any>? =
+        globalRedoStack.lastOrNull()
 
     /** addText도 페이지별로 저장 */
     fun addText(text: String, x: Float, y: Float) {
