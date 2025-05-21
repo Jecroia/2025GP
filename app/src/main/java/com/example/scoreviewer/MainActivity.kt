@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.view.MenuItem
 import android.view.inputmethod.InputMethodManager
 import android.view.inputmethod.EditorInfo
 import android.widget.EditText
@@ -227,6 +228,15 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         pdfManager.close()
     }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean =
+        when (item.itemId) {
+            android.R.id.home -> {
+                openFilePicker()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
 
     private fun showSaveDialog() {
         val dialogView = layoutInflater.inflate(R.layout.dialog_save_options, null)
