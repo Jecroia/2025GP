@@ -23,8 +23,8 @@ class AnnotationCanvasView @JvmOverloads constructor(
 
     private var currentPage: Int = 0
     private val pageToHistory = mutableMapOf<Int, MutableList<Stroke>>()
-    private val pageToActionStack = mutableMapOf<Int, MutableList<Pair<Stroke, ActionType>>>()
-    private val pageToRedoStack   = mutableMapOf<Int, MutableList<Pair<Stroke, ActionType>>>()
+    private val globalActionStack = mutableListOf<Triple<Int, Stroke, ActionType>>()
+    private val globalRedoStack   = mutableListOf<Triple<Int, Stroke, ActionType>>()
 
     var onTextTapListener: ((Float, Float) -> Unit)? = null
     private var currentTool: Tool? = null
@@ -40,47 +40,42 @@ class AnnotationCanvasView @JvmOverloads constructor(
 
     /** undo/redo도 페이지별로 작동하도록 수정 */
     fun undoLast(): Boolean {
-        val actionStack = pageToActionStack.getOrPut(currentPage) { mutableListOf() }
-        val history     = pageToHistory    .getOrPut(currentPage) { mutableListOf() }
-        val redoStack   = pageToRedoStack  .getOrPut(currentPage) { mutableListOf() }
-        if (actionStack.isEmpty()) return false
+        if (globalActionStack.isEmpty()) return false
+        val (page, stroke, type) = globalActionStack.removeAt(globalActionStack.lastIndex)
+        val history = pageToHistory.getOrPut(page) { mutableListOf() }
 
-        val (stroke, type) = actionStack.removeAt(actionStack.lastIndex)
         when (type) {
             ActionType.ADD    -> history.remove(stroke)
             ActionType.REMOVE -> history.add(stroke)
         }
-        redoStack.add(stroke to type)
+        globalRedoStack.add(Triple(page, stroke, type))
         invalidate()
         return true
     }
 
     fun redoLast(): Boolean {
-        val actionStack = pageToActionStack.getOrPut(currentPage) { mutableListOf() }
-        val history     = pageToHistory    .getOrPut(currentPage) { mutableListOf() }
-        val redoStack   = pageToRedoStack  .getOrPut(currentPage) { mutableListOf() }
-        if (redoStack.isEmpty()) return false
+        if (globalRedoStack.isEmpty()) return false
+        val (page, stroke, type) = globalRedoStack.removeAt(globalRedoStack.lastIndex)
+        val history = pageToHistory.getOrPut(page) { mutableListOf() }
 
-        val (stroke, type) = redoStack.removeAt(redoStack.lastIndex)
         when (type) {
             ActionType.ADD    -> history.add(stroke)
             ActionType.REMOVE -> history.remove(stroke)
         }
-        actionStack.add(stroke to type)
+        globalActionStack.add(Triple(page, stroke, type))
         invalidate()
         return true
     }
 
     /** addText도 페이지별로 저장 */
     fun addText(text: String, x: Float, y: Float) {
-        val history   = pageToHistory   .getOrPut(currentPage) { mutableListOf() }
-        val actionStack = pageToActionStack.getOrPut(currentPage) { mutableListOf() }
-        pageToRedoStack[currentPage]?.clear()
-
+        val history = pageToHistory.getOrPut(currentPage) { mutableListOf() }
+        globalRedoStack.clear()
         val paint = makePaintFor(Tool.TEXT)
         val newStroke = Stroke.TextStroke(text, x, y, paint)
+
         history.add(newStroke)
-        actionStack.add(newStroke to ActionType.ADD)
+        globalActionStack.add(Triple(currentPage, newStroke, ActionType.ADD))
         invalidate()
     }
 
@@ -90,8 +85,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
 
         /**각 페이지별 리스트를 미리 오픈 */
         val history     = pageToHistory   .getOrPut(currentPage) { mutableListOf() }
-        val actionStack = pageToActionStack.getOrPut(currentPage) { mutableListOf() }
-        pageToRedoStack[currentPage]?.clear()
+        globalRedoStack.clear()
 
         when (tool) {
             Tool.PEN, Tool.HIGHLIGHTER -> {
@@ -101,7 +95,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
                         val path  = Path().apply { moveTo(x, y) }
                         val newStroke = Stroke.PathStroke(path, paint, mutableListOf(PointF(x, y)))
                         history.add(newStroke)
-                        actionStack.add(newStroke to ActionType.ADD)
+                        globalActionStack.add(Triple(currentPage, newStroke, ActionType.ADD))
                     }
                     MotionEvent.ACTION_MOVE -> (history.lastOrNull() as? Stroke.PathStroke)?.let {
                         it.path.lineTo(x, y)
@@ -141,7 +135,8 @@ class AnnotationCanvasView @JvmOverloads constructor(
                         }
                     }
                     if (erased) {
-                        removed.forEach { actionStack.add(it to ActionType.REMOVE) }
+                        removed.forEach { globalActionStack.add(Triple(currentPage, it, ActionType.REMOVE)) }
+                        globalRedoStack.clear()
                         invalidate()
                     }
                 }

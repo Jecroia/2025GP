@@ -113,10 +113,14 @@
     <!-- 필기 오버레이 Canvas -->
     <com.example.scoreviewer.AnnotationCanvasView
         android:id            ="@+id/annotationCanvas"
-        android:layout_width  ="match_parent"
-        android:layout_height ="match_parent"
+        android:layout_width  ="0dp"
+        android:layout_height ="0dp"
         android:clickable     ="true"
-        android:focusable     ="true"/>
+        android:focusable     ="true"
+        app:layout_constraintTop_toBottomOf   ="@id/pageSeekBar"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf ="parent"
+        app:layout_constraintEnd_toEndOf     ="parent"/>
 
     <!-- 썸네일/Inline-EditText 컨테이너 -->
     <FrameLayout
