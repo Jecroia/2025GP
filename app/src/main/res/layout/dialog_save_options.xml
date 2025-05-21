@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:padding="24dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="파일 제목"
+        android:textStyle="bold"
+        android:paddingBottom="4dp"/>
+    <EditText
+        android:id="@+id/editTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="예: MyScore"
+        android:inputType="text"
+        android:padding="8dp"
+        android:background="@android:drawable/editbox_background_normal"/>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#CCC"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:id="@+id/textPath"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="저장 경로: /Android/data/…/files/"
+        android:textSize="14sp"/>
+
+    <RadioGroup
+        android:id="@+id/radioGroupSaveType"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginTop="16dp">
+
+        <RadioButton
+            android:id="@+id/radio_flattenPdf"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="필기와 악보를 하나의 PDF로 저장"
+            android:paddingVertical="8dp"/>
+
+        <RadioButton
+            android:id="@+id/radio_separate"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="필기와 악보를 따로 저장"
+            android:paddingVertical="8dp"/>
+    </RadioGroup>
+</LinearLayout>

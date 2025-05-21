@@ -75,9 +75,17 @@
             android:background    ="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="다시실행"/>
 
+        <ImageButton
+            android:id            ="@+id/btnSave"
+            android:layout_width  ="wrap_content"
+            android:layout_height ="match_parent"
+            android:src           ="@drawable/tool_save_24"
+            android:background    ="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="저장"/>
+
     </androidx.appcompat.widget.Toolbar>
 
-    <!-- 하단 페이지 탐색 SeekBar -->
+    <!-- 상단 페이지 탐색 SeekBar -->
     <SeekBar
         android:id              ="@+id/pageSeekBar"
         android:layout_width    ="0dp"
