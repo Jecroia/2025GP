@@ -11,6 +11,7 @@ import android.provider.OpenableColumns
 import android.view.MenuItem
 import android.view.inputmethod.InputMethodManager
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
@@ -46,9 +47,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnRedo: ImageButton
     private lateinit var btnToggleSeekBar: ImageButton
     private lateinit var btnSave: ImageButton
+    private lateinit var btnPlay: ImageButton
 
     private var currentTool: Tool? = null
     private var isSeekBarActive = true
+    private var currentPdfFile: File? = null
+    private var currentMidiFile: File? = null
 
     private val PICK_PDF_FILE = 1001
 
@@ -82,6 +86,20 @@ class MainActivity : AppCompatActivity() {
             else
                 R.drawable.baseline_toggle_off_24
             btnToggleSeekBar.setImageResource(icon)
+        }
+
+        btnPlay = findViewById(R.id.btnPlay)
+        btnPlay.setOnClickListener {
+            currentPdfFile?.let {
+                val intent = Intent(this, PlayActivity::class.java).apply {
+                    putExtra("pdfPath", it.absolutePath)
+                    putExtra("currentPage", viewPager.currentItem)
+                    currentMidiFile?.let { midi ->
+                        putExtra("midiPath", midi.absolutePath)
+                    }
+                }
+                startActivity(intent)
+            }
         }
 
         btnPen.setOnClickListener        { toggleTool(Tool.PEN, btnPen) }
@@ -179,15 +197,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openPdf(pdfFile: File) {
+
+        viewPager.offscreenPageLimit = 1
+        currentPdfFile = pdfFile
         pdfManager.open(pdfFile.absolutePath)
         val count = pdfManager.pageCount()
 
         viewPager.adapter = PDFPagerAdapter(pdfManager, count, annotationCanvas, viewPager)
 
+        val prefs = getSharedPreferences("PlaybackPrefs", MODE_PRIVATE)
+        prefs.edit().putString("last_pdf", pdfFile.absolutePath).apply()
+
         pageBar = PageBar(pdfManager, count).also {
             it.initializeSeekBar(seekBar)
             it.onPageSelected = { page -> viewPager.setCurrentItem(page, true) }
             it.onThumbnailRequested = { bm, x, y -> handleThumbnailRequest(bm, x, y) }
+            //seekbar false : default
+            isSeekBarActive = false
+            it.setSeekBarActive(false)
+            btnToggleSeekBar.setImageResource(R.drawable.baseline_toggle_off_24)
         }
 
         viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
@@ -212,6 +240,16 @@ class MainActivity : AppCompatActivity() {
                             ?.substringBeforeLast('.')
                             ?: pdfFile.nameWithoutExtension
         }
+        //동일 이름 MIDI 파일 존재 시 자동 연결
+        currentMidiFile = null //초기화
+        val midiFile = File(pdfFile.parentFile, pdfFile.nameWithoutExtension + ".mid")
+        if (midiFile.exists()) {
+            currentMidiFile = midiFile
+        }else {
+            prefs.edit().remove("last_midi").apply()
+        }
+
+
     }
 
     private fun handleThumbnailRequest(bitmap: Bitmap, x: Int, y: Int) {
@@ -232,7 +270,22 @@ class MainActivity : AppCompatActivity() {
             fragThumbnail?.updateThumbnail(bitmap, x, y)
         }
     }
+    override fun onResume() {
+        super.onResume()
 
+        val prefs = getSharedPreferences("PlaybackPrefs", MODE_PRIVATE)
+        val savedPage = prefs.getInt("last_page", -1)
+        val savedPdfPath = prefs.getString("last_pdf", null)
+
+        if (savedPage != -1 && savedPdfPath != null && currentPdfFile?.absolutePath == savedPdfPath) {
+            viewPager.setCurrentItem(savedPage, false)
+            seekBar.progress = savedPage
+        }
+    }
+    override fun onSupportNavigateUp(): Boolean {
+        openFilePicker()
+        return true
+    }
     override fun onDestroy() {
         super.onDestroy()
         pdfManager.close()
