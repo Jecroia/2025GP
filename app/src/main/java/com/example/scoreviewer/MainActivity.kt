@@ -21,6 +21,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import java.io.File
 
@@ -181,7 +182,7 @@ class MainActivity : AppCompatActivity() {
         pdfManager.open(pdfFile.absolutePath)
         val count = pdfManager.pageCount()
 
-        viewPager.adapter = PDFPagerAdapter(pdfManager, count)
+        viewPager.adapter = PDFPagerAdapter(pdfManager, count, annotationCanvas, viewPager)
 
         pageBar = PageBar(pdfManager, count).also {
             it.initializeSeekBar(seekBar)
@@ -193,6 +194,14 @@ class MainActivity : AppCompatActivity() {
             override fun onPageSelected(position: Int) {
                 seekBar.progress = position
                 annotationCanvas.setPage(position)
+
+                val rv = viewPager.getChildAt(0) as? RecyclerView
+                val holder = rv
+                    ?.findViewHolderForAdapterPosition(position)
+                        as? PDFPagerAdapter.PageViewHolder
+                holder?.let {
+                    annotationCanvas.setTransformationMatrix(it.imageView.imageMatrix)
+                }
             }
         })
         annotationCanvas.setPage(viewPager.currentItem)
@@ -239,48 +248,44 @@ class MainActivity : AppCompatActivity() {
         }
 
     private fun showSaveDialog() {
+        // 다이얼로그 뷰 inflate
         val dialogView = layoutInflater.inflate(R.layout.dialog_save_options, null)
         val editTitle = dialogView.findViewById<EditText>(R.id.editTitle)
-        val textPath = dialogView.findViewById<TextView>(R.id.textPath)
+        val textPathView = dialogView.findViewById<TextView>(R.id.textPath)
         val radioFlatten = dialogView.findViewById<RadioButton>(R.id.radio_flattenPdf)
         val radioSeparate = dialogView.findViewById<RadioButton>(R.id.radio_separate)
 
-        // ─────────── 기본 파일명 계산 ───────────
+        // 기본 파일명 계산
         val filesDir = getExternalFilesDir(null)!!
-        // 1) 기본 베이스 이름
-        val base = "${originalPdfBaseName}_sv"
-        // 2) 같은 이름의 PDF가 몇 개 있는지 세기
-        val existing = filesDir.listFiles { f ->
-            f.extension.equals("pdf", true) &&
-                    f.nameWithoutExtension.startsWith(base)
+        val baseName = "${originalPdfBaseName}_sv"
+        val count    = filesDir.listFiles { f ->
+            f.extension.equals("pdf", ignoreCase = true)
+                    && f.nameWithoutExtension.startsWith(baseName)
         }?.size ?: 0
-        // 3) suffix 붙이기 (_sv, _sv_2, _sv_3 …)
-        val defaultName = if (existing <= 1) base else "${base}_$existing"
-        // ───────────────────────────────────────
+        val defaultName = if (count <= 1) baseName else "${baseName}_$count"
 
-        // 미리 채워 두기
-        editTitle.setText(defaultName)
-        editTitle.setSelection(defaultName.length) // 커서를 맨 뒤로
+        // 뷰 초기화
+        editTitle.apply {
+            setText(defaultName)
+            setSelection(text.length)
+        }
+        textPathView.text = "저장 경로: ${filesDir.absolutePath}"
+        radioFlatten.isChecked = true
 
-        // 나머지 초기값
-        dialogView.findViewById<RadioButton>(R.id.radio_flattenPdf).isChecked = true
-        dialogView.findViewById<TextView>(R.id.textPath).text =
-            "저장 경로: ${filesDir.absolutePath}"
-
+        // 다이얼로그 생성
         AlertDialog.Builder(this)
             .setTitle("필기 저장")
             .setView(dialogView)
             .setNegativeButton("취소", null)
             .setPositiveButton("저장") { _, _ ->
                 val title = editTitle.text.toString().ifBlank { defaultName }
-                val method =
-                    if (dialogView.findViewById<RadioButton>(R.id.radio_flattenPdf).isChecked)
-                        "PDF로 저장" else "별도 파일로 저장"
-                // TODO: saveAnnotatedPdf(title)
+                val method = if (radioFlatten.isChecked) "PDF로 저장" else "별도 파일로 저장"
+                // TODO: 실제 저장 로직 호출 (e.g. saveAnnotatedPdf(title, method))
                 Toast.makeText(this, "저장: $title ($method)", Toast.LENGTH_SHORT).show()
             }
             .show()
     }
+
     private fun queryFileName(uri: Uri): String? {
         contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) {
@@ -318,4 +323,3 @@ class MainActivity : AppCompatActivity() {
     }
 
 }
-

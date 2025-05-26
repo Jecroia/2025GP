@@ -26,6 +26,9 @@ class AnnotationCanvasView @JvmOverloads constructor(
     private val globalActionStack = mutableListOf<Triple<Int, Stroke, ActionType>>()
     private val globalRedoStack   = mutableListOf<Triple<Int, Stroke, ActionType>>()
 
+    private val imageTransformationMatrix = Matrix()
+    private val inverseImageTransformationMatrix = Matrix()
+
     var onTextTapListener: ((Float, Float) -> Unit)? = null
     private var currentTool: Tool? = null
 
@@ -86,10 +89,15 @@ class AnnotationCanvasView @JvmOverloads constructor(
 
     override fun onTouchEvent(ev: MotionEvent): Boolean {
         val tool = currentTool ?: return false  // PDF 스크롤 방지를 위한 기존 로직
-        val x = ev.x; val y = ev.y
 
-        /**각 페이지별 리스트를 미리 오픈 */
-        val history     = pageToHistory   .getOrPut(currentPage) { mutableListOf() }
+        // ① 화면 좌표 → 모델 좌표 변환
+        val touchPoint = floatArrayOf(ev.x, ev.y)
+        inverseImageTransformationMatrix.mapPoints(touchPoint)
+        val modelX = touchPoint[0]
+        val modelY = touchPoint[1]
+
+        // ② 페이지별 히스토리와 redo 스택 초기화
+        val history = pageToHistory.getOrPut(currentPage) { mutableListOf() }
         globalRedoStack.clear()
 
         when (tool) {
@@ -97,14 +105,14 @@ class AnnotationCanvasView @JvmOverloads constructor(
                 when (ev.action) {
                     MotionEvent.ACTION_DOWN -> {
                         val paint = makePaintFor(tool)
-                        val path  = Path().apply { moveTo(x, y) }
-                        val newStroke = Stroke.PathStroke(path, paint, mutableListOf(PointF(x, y)))
+                        val path  = Path().apply { moveTo(modelX, modelY) }
+                        val newStroke = Stroke.PathStroke(path, paint, mutableListOf(PointF(modelX, modelY)))
                         history.add(newStroke)
                         globalActionStack.add(Triple(currentPage, newStroke, ActionType.ADD))
                     }
                     MotionEvent.ACTION_MOVE -> (history.lastOrNull() as? Stroke.PathStroke)?.let {
-                        it.path.lineTo(x, y)
-                        it.points.add(PointF(x, y))
+                        it.path.lineTo(modelX, modelY)
+                        it.points.add(PointF(modelX, modelY))
                     }
                     else -> {}
                 }
@@ -119,7 +127,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
                     while (iter.hasNext()) {
                         when (val s = iter.next()) {
                             is Stroke.PathStroke ->
-                                if (intersectsPath(s.points, x, y, s.paint.strokeWidth)) {
+                                if (intersectsPath(s.points, modelX, modelY, s.paint.strokeWidth)) {
                                     iter.remove()
                                     removed.add(s)
                                     erased = true
@@ -131,7 +139,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
                                     s.x + s.paint.measureText(s.text),
                                     s.y
                                 )
-                                if (bounds.contains(x, y)) {
+                                if (bounds.contains(modelX, modelY)) {
                                     iter.remove()
                                     removed.add(s)
                                     erased = true
@@ -149,17 +157,34 @@ class AnnotationCanvasView @JvmOverloads constructor(
 
             Tool.TEXT ->
                 if (ev.action == MotionEvent.ACTION_DOWN)
-                    onTextTapListener?.invoke(x, y)
+                    onTextTapListener?.invoke(modelX, modelY)
         }
         return true
     }
 
+
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        pageToHistory[currentPage]?.forEach {
-            when (it) {
-                is Stroke.PathStroke -> canvas.drawPath(it.path, it.paint)
-                is Stroke.TextStroke -> canvas.drawText(it.text, it.x, it.y, it.paint)
+
+        // 각 페이지의 Stroke 리스트를 꺼내서…
+        pageToHistory[currentPage]?.forEach { stroke ->
+            when (stroke) {
+                is Stroke.PathStroke -> {
+                    // 1) 원본 Path를 복사해서 변환
+                    val transformedPath = Path()
+                    stroke.path.transform(imageTransformationMatrix, transformedPath)
+
+                    // 2) 그대로 그리기 (paint.strokeWidth는 건드리지 않음)
+                    canvas.drawPath(transformedPath, stroke.paint)
+                }
+                is Stroke.TextStroke -> {
+                    // 1) 텍스트 좌표만 변환
+                    val pt = floatArrayOf(stroke.x, stroke.y)
+                    imageTransformationMatrix.mapPoints(pt)
+
+                    // 2) 텍스트 그리기 (paint.textSize도 그대로)
+                    canvas.drawText(stroke.text, pt[0], pt[1], stroke.paint)
+                }
             }
         }
     }
@@ -201,5 +226,11 @@ class AnnotationCanvasView @JvmOverloads constructor(
         val ct = t.coerceIn(0f, 1f)
         val projX = x1 + ct*dx; val projY = y1 + ct*dy
         return hypot(px - projX, py - projY)
+    }
+
+    fun setTransformationMatrix(matrix: Matrix) {
+        imageTransformationMatrix.set(matrix)
+        imageTransformationMatrix.invert(inverseImageTransformationMatrix)
+        invalidate()
     }
 }
