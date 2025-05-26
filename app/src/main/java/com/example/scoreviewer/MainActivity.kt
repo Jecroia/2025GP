@@ -11,7 +11,6 @@ import android.provider.OpenableColumns
 import android.view.MenuItem
 import android.view.inputmethod.InputMethodManager
 import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton

@@ -40,6 +40,7 @@ class PlayActivity : AppCompatActivity() {
     private lateinit var pdfManager: PdfManager
     private lateinit var midiSeekBar: SeekBar
     private lateinit var timeText: TextView
+    private lateinit var annotationCanvas: AnnotationCanvasView
     private var pageCount = 0
 
     private var pdfPath: String? = null
@@ -57,7 +58,9 @@ class PlayActivity : AppCompatActivity() {
         midiSeekBar = findViewById(R.id.midiSeekBar)
         timeText = findViewById(R.id.txtCurrentTime)
         viewPager = findViewById(R.id.viewPager)
+        annotationCanvas = findViewById(R.id.annotationCanvas)
         pdfManager = PdfManager()
+
 
         val prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
         val savedPage = prefs.getInt(KEY_PAGE, -1)
@@ -71,7 +74,9 @@ class PlayActivity : AppCompatActivity() {
         if (pdfPath != null) {
             pdfManager.open(pdfPath!!)
             pageCount = pdfManager.pageCount()
-            viewPager.adapter = PDFPagerAdapter(pdfManager, pageCount)
+            viewPager.adapter = PDFPagerAdapter(
+                pdfManager, pageCount, annotationCanvas, viewPager
+            )
         }
 
         if (midiPath != null) {

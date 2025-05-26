@@ -47,19 +47,21 @@ class PDFPagerAdapter(
         pixmap.destroy()
 
         // PhotoViewAttacher 로 핀치줌/팬/회전 기능 추가
-        val attacher = PhotoViewAttacher(holder.imageView)
-        attacher.setOnMatrixChangeListener {
-            // 현재 보고 있는 페이지에 대해서만 매트릭스 반영
+        if (annotationCanvas != null && viewPager != null) {
+            val attacher = PhotoViewAttacher(holder.imageView)
+            attacher.setOnMatrixChangeListener {
+                // 현재 보고 있는 페이지에 대해서만 매트릭스 반영
+                if (position == viewPager.currentItem) {
+                    annotationCanvas.setTransformationMatrix(holder.imageView.imageMatrix)
+                    viewPager.isUserInputEnabled = (attacher.scale <= 1.0f)
+                }
+            }
+
+            // 초기 매트릭스 설정과 페이지 스와이프 허용도 현재 페이지에 한정
             if (position == viewPager.currentItem) {
                 annotationCanvas.setTransformationMatrix(holder.imageView.imageMatrix)
-                viewPager.isUserInputEnabled = (attacher.scale <= 1.0f)
+                viewPager.isUserInputEnabled = true
             }
-        }
-
-        // 초기 매트릭스 설정과 페이지 스와이프 허용도 현재 페이지에 한정
-        if (position == viewPager.currentItem) {
-            annotationCanvas.setTransformationMatrix(holder.imageView.imageMatrix)
-            viewPager.isUserInputEnabled = true
         }
     }
 
