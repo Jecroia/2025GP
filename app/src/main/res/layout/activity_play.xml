@@ -2,6 +2,7 @@
 <androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
 
@@ -16,6 +17,17 @@
         app:layout_constraintTop_toTopOf="parent">
 
         <!-- 오른쪽 정렬 아이콘 -->
+
+        <ImageButton
+            android:id="@+id/btnSetting"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_gravity="end"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:padding="8dp"
+            android:src="@drawable/ic_settings_24"
+            android:contentDescription="환경설정" />
+
         <ImageButton
             android:id="@+id/btnSelectMidi"
             android:layout_width="wrap_content"
@@ -25,7 +37,9 @@
             android:padding="8dp"
             android:src="@drawable/ic_folder_24"
             android:contentDescription="MIDI 선택" />
+
     </androidx.appcompat.widget.Toolbar>
+
 
     <!-- 재생바 + 시간 -->
     <LinearLayout
@@ -44,7 +58,7 @@
             android:id="@+id/txtCurrentTime"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="00:00:00"
+            android:text="00:00 / 00:00"
             android:textColor="#FFFFFF"
             android:textStyle="bold"
             android:textSize="14sp"
@@ -126,6 +140,55 @@
             android:progress="50" />
     </LinearLayout>
 
+    <LinearLayout
+        android:id="@+id/syncPanel"
+        android:layout_width="406dp"
+        android:layout_height="38dp"
+        android:background="#eeeeee"
+        android:orientation="horizontal"
+        android:padding="10dp"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/controlBar">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginEnd="10dp"
+            android:text="싱크 오프셋(ms):"
+            android:textSize="14sp" />
+
+        <EditText
+            android:id="@+id/editSyncOffset"
+            android:layout_width="80dp"
+            android:layout_height="wrap_content"
+            android:background="@android:drawable/edit_text"
+            android:hint="0"
+            android:textColor="#000000"
+            android:inputType="numberSigned" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_vertical"
+            android:layout_marginStart="16dp"
+            android:text="시작 지연(s):"
+            android:textSize="10sp" />
+
+        <EditText
+            android:id="@+id/editStartDelay"
+            android:layout_width="80dp"
+            android:layout_height="wrap_content"
+            android:background="@android:drawable/edit_text"
+            android:hint="0"
+            android:textColor="#000000"
+            android:inputType="number" />
+
+    </LinearLayout>
+
+
     <androidx.viewpager2.widget.ViewPager2
         android:id="@+id/viewPager"
         android:layout_width="0dp"
@@ -135,7 +198,7 @@
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="1.0"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@+id/controlBar"
+        app:layout_constraintTop_toBottomOf="@id/syncPanel"
         app:layout_constraintVertical_bias="1.0" />
     <com.example.scoreviewer.AnnotationCanvasView
         android:id="@+id/annotationCanvas"
@@ -143,7 +206,7 @@
         android:layout_height="0dp"
         android:clickable="true"
         android:focusable="true"
-        app:layout_constraintTop_toBottomOf="@id/controlBar"
+        app:layout_constraintTop_toBottomOf="@id/syncPanel"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintBottom_toBottomOf="parent"/>
