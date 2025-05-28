@@ -57,10 +57,10 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.activity)
     implementation(libs.androidx.constraintlayout)
-    implementation("androidx.fragment:fragment-ktx:1.7.1")
+    implementation(libs.androidx.fragment.ktx)
     implementation(libs.androidx.preference.ktx)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    implementation("com.github.chrisbanes:PhotoView:2.3.0")
+    implementation(libs.photoview)
 }
