@@ -92,6 +92,15 @@
             android:background    ="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="저장"/>
 
+        <ImageButton
+            android:id="@+id/btnPlay"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:src="@drawable/ic_play_arrow_24"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="재생"
+            />
+
     </androidx.appcompat.widget.Toolbar>
 
     <!-- 상단 페이지 탐색 SeekBar -->
