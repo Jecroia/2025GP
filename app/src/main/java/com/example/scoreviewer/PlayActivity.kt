@@ -7,15 +7,22 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.OpenableColumns
+import android.text.Editable
+import android.text.TextWatcher
 import android.util.Log
+import android.view.View
 import android.view.WindowManager
+import android.widget.Button
+import android.widget.EditText
 import android.widget.ImageButton
+import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.preference.PreferenceManager
 import androidx.viewpager2.widget.ViewPager2
 import java.io.File
 
@@ -32,8 +39,10 @@ class PlayActivity : AppCompatActivity() {
     private val PICK_MIDI_FILE = 2001
 
     private var isPlaying = false
+    private var restored = false
     private var currentMillis = 0
     private var totalMillis = 0
+
     private lateinit var handler: Handler
     private lateinit var updateRunnable: Runnable
     private lateinit var viewPager: ViewPager2
@@ -41,8 +50,10 @@ class PlayActivity : AppCompatActivity() {
     private lateinit var midiSeekBar: SeekBar
     private lateinit var timeText: TextView
     private lateinit var annotationCanvas: AnnotationCanvasView
-    private var pageCount = 0
+    private lateinit var syncWatcher: TextWatcher
+    private lateinit var delayWatcher: TextWatcher
 
+    private var pageCount = 0
     private var pdfPath: String? = null
     private var midiPath: String? = null
 
@@ -59,6 +70,59 @@ class PlayActivity : AppCompatActivity() {
         timeText = findViewById(R.id.txtCurrentTime)
         viewPager = findViewById(R.id.viewPager)
         annotationCanvas = findViewById(R.id.annotationCanvas)
+        val syncPanel = findViewById<LinearLayout>(R.id.syncPanel)
+        val syncOffsetInput = findViewById<EditText>(R.id.editSyncOffset)
+        val startDelayInput = findViewById<EditText>(R.id.editStartDelay)
+        val btnApplySync = findViewById<Button>(R.id.btnApplySync)
+
+        // Load from preferences
+
+        val userPrefs = PreferenceManager.getDefaultSharedPreferences(this)
+
+        if (userPrefs.contains("sync_offset_ms")) {
+            syncOffsetInput.setText(userPrefs.getInt("sync_offset_ms", 0).toString())
+        } else {
+            syncOffsetInput.setText("")
+        }
+
+        if (userPrefs.contains("start_delay_sec")) {
+            startDelayInput.setText(userPrefs.getInt("start_delay_sec", 0).toString())
+        } else {
+            startDelayInput.setText("")
+        }
+            .toString()
+
+        // Save to preferences on input change
+
+        syncWatcher = object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) {
+                val value = s.toString().toIntOrNull() ?: return
+                PreferenceManager.getDefaultSharedPreferences(this@PlayActivity).edit()
+                    .putInt("sync_offset_ms", value).apply()
+            }
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        }
+        delayWatcher = object : TextWatcher {
+            override fun afterTextChanged(s: Editable?) {
+                val value = s.toString().toIntOrNull() ?: return
+                PreferenceManager.getDefaultSharedPreferences(this@PlayActivity).edit()
+                    .putInt("start_delay_sec", value).apply()
+            }
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+        }
+        syncOffsetInput.addTextChangedListener(syncWatcher)
+        startDelayInput.addTextChangedListener(delayWatcher)
+
+
+        // Toggle syncPanel visibility with btnSetting
+        val btnSetting = findViewById<ImageButton>(R.id.btnSetting)
+        btnSetting.setOnClickListener {
+            syncPanel.visibility = if (syncPanel.visibility == View.GONE) View.VISIBLE else View.GONE
+        }
+
+
         pdfManager = PdfManager()
 
 
@@ -136,6 +200,19 @@ class PlayActivity : AppCompatActivity() {
             }
             startActivityForResult(intent, PICK_MIDI_FILE)
         }
+        btnApplySync.setOnClickListener {
+            val syncValue = syncOffsetInput.text.toString().toIntOrNull()
+            val delayValue = startDelayInput.text.toString().toIntOrNull()
+
+            val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+            prefs.edit().apply {
+                if (syncValue != null) putInt("sync_offset_ms", syncValue)
+                if (delayValue != null) putInt("start_delay_sec", delayValue)
+                apply()
+            }
+
+            Toast.makeText(this, "싱크 오프셋 및 시작 지연 설정이 적용되었습니다.", Toast.LENGTH_SHORT).show()
+        }
 
         midiSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -174,7 +251,21 @@ class PlayActivity : AppCompatActivity() {
                     midiSeekBar.progress = currentMillis
                     updateSeekUI()
                 }
-                .setNegativeButton("아니오", null)
+
+                .setNegativeButton("아니오") { _, _ ->
+                    syncOffsetInput.removeTextChangedListener(syncWatcher)
+                    startDelayInput.removeTextChangedListener(delayWatcher)
+                    syncOffsetInput.setText("")
+                    startDelayInput.setText("")
+                    PreferenceManager.getDefaultSharedPreferences(this).edit().apply {
+                        remove("sync_offset_ms")
+                        remove("start_delay_sec")
+                        apply()
+                    }
+                    syncOffsetInput.addTextChangedListener(syncWatcher)
+                    startDelayInput.addTextChangedListener(delayWatcher)
+                }
+
                 .show()
         }
         if (midiPath == null) {
@@ -189,7 +280,11 @@ class PlayActivity : AppCompatActivity() {
         }
     }
 
+
     private fun startPlaybackSimulation() {
+        val userPrefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val startDelaySec = userPrefs.getInt("start_delay_sec", 0)
+
         isPlaying = true
         updateRunnable = object : Runnable {
             override fun run() {
@@ -202,8 +297,9 @@ class PlayActivity : AppCompatActivity() {
                 handler.postDelayed(this, 1000)
             }
         }
-        handler.post(updateRunnable)
+        handler.postDelayed(updateRunnable, startDelaySec * 1000L)
     }
+
 
     private fun stopPlayback() {
         isPlaying = false
@@ -211,13 +307,18 @@ class PlayActivity : AppCompatActivity() {
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
     }
 
+
     private fun updateSeekUI() {
         val currentFormatted = formatMillis(currentMillis.toLong())
         val totalFormatted = formatMillis(totalMillis.toLong())
         midiSeekBar.progress = currentMillis
         timeText.text = "$currentFormatted / $totalFormatted"
-        val page = (currentMillis.toFloat() / totalMillis * pageCount).toInt()
-        viewPager.setCurrentItem(page, true)
+
+        val userPrefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val syncOffset = userPrefs.getInt("sync_offset_ms", 0)
+        val adjustedMillis = (currentMillis + syncOffset).coerceAtLeast(0)
+        val page = (adjustedMillis.toFloat() / totalMillis * pageCount).toInt()
+        viewPager.setCurrentItem(page.coerceIn(0, pageCount - 1), true)
     }
 
     private fun savePlaybackState() {
