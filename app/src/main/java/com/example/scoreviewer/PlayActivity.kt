@@ -1,5 +1,6 @@
 package com.example.scoreviewer
 
+import android.content.Context
 import android.content.Intent
 import android.database.Cursor
 import android.net.Uri
@@ -27,6 +28,22 @@ class PlayActivity : AppCompatActivity() {
         const val KEY_MILLIS = "last_millis"
         const val KEY_PDF_PATH = "last_pdf"
         const val KEY_MIDI_PATH = "last_midi"
+
+        fun loadSessionForPdf(context: Context, pdfPath: String): Pair<Int,Int> {
+            val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+
+            // 1) 전역 저장값
+            val globalPage   = prefs.getInt(KEY_PAGE,   0)
+            val globalMillis = prefs.getInt(KEY_MILLIS, 0)
+
+            // 2) PDF별 식별자 & 키
+            val f = File(pdfPath)
+            val id = "${f.name}_${f.length()}_${f.lastModified()}"
+            val pdfPage   = prefs.getInt("${id}_page",   globalPage)
+            val pdfMillis = prefs.getInt("${id}_millis", globalMillis)
+
+            return pdfPage to pdfMillis
+        }
     }
 
     private val PICK_MIDI_FILE = 2001

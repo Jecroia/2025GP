@@ -198,11 +198,11 @@ class AnnotationCanvasView @JvmOverloads constructor(
             else             -> 5f
         }
         color = when (tool) {
-            Tool.PEN         -> Color.BLACK
-            Tool.HIGHLIGHTER -> 0x33FFFF00.toInt()
+            Tool.PEN         -> Color.RED
+            Tool.HIGHLIGHTER -> 0x3300BFFF.toInt()
             Tool.ERASER      -> Color.TRANSPARENT
-            Tool.TEXT        -> Color.BLACK
-            else             -> Color.BLACK
+            Tool.TEXT        -> Color.RED
+            else             -> Color.RED
         }
         if (tool == Tool.ERASER)
             xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
@@ -231,6 +231,13 @@ class AnnotationCanvasView @JvmOverloads constructor(
     fun setTransformationMatrix(matrix: Matrix) {
         imageTransformationMatrix.set(matrix)
         imageTransformationMatrix.invert(inverseImageTransformationMatrix)
+        invalidate()
+    }
+
+    fun clearAll() {
+        pageToHistory.clear()
+        globalActionStack.clear()
+        globalRedoStack.clear()
         invalidate()
     }
 }

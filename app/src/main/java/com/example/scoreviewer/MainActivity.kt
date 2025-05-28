@@ -204,6 +204,8 @@ class MainActivity : AppCompatActivity() {
 
         viewPager.adapter = PDFPagerAdapter(pdfManager, count, annotationCanvas, viewPager)
 
+        annotationCanvas.clearAll()
+
         val prefs = getSharedPreferences("PlaybackPrefs", MODE_PRIVATE)
         prefs.edit().putString("last_pdf", pdfFile.absolutePath).apply()
 
