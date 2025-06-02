@@ -5,12 +5,18 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.graphics.Rect
+import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.view.MenuItem
 import android.view.inputmethod.InputMethodManager
+import android.view.MotionEvent
+import android.view.View
+import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
+import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
@@ -48,7 +54,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSave: ImageButton
     private lateinit var btnPlay: ImageButton
 
+    private lateinit var btnCanvas: ImageButton
+    private lateinit var canvasToolsPanel: View
+    private lateinit var btnDecreaseSize: Button
+    private lateinit var btnIncreaseSize: Button
+    private lateinit var tvSize: TextView
+    private lateinit var viewSelectedColor: View
+    private lateinit var tvPreview: TextView
+
     private var currentTool: Tool? = null
+    private var isToolActive: Boolean = false
     private var isSeekBarActive = true
     private var currentPdfFile: File? = null
     private var currentMidiFile: File? = null
@@ -69,6 +84,9 @@ class MainActivity : AppCompatActivity() {
 
         annotationCanvas = findViewById(R.id.annotationCanvas)
         btnToggleSeekBar = findViewById(R.id.btnToggleSeekBar)
+        btnCanvas = findViewById(R.id.btnCanvas)
+        canvasToolsPanel = findViewById(R.id.canvasToolsPanel)
+
         btnPen = findViewById(R.id.btnPen)
         btnHighlighter = findViewById(R.id.btnHighlighter)
         btnText = findViewById(R.id.btnText)
@@ -76,6 +94,18 @@ class MainActivity : AppCompatActivity() {
         btnUndo = findViewById(R.id.btnUndo)
         btnRedo = findViewById(R.id.btnRedo)
         btnSave = findViewById(R.id.btnSave)
+        btnPlay = findViewById(R.id.btnPlay)
+
+        btnDecreaseSize = findViewById(R.id.btnDecreaseSize)
+        btnIncreaseSize = findViewById(R.id.btnIncreaseSize)
+        tvSize = findViewById(R.id.tvSize)
+        viewSelectedColor = findViewById(R.id.viewSelectedColor)
+        tvPreview = findViewById(R.id.tvPreview)
+
+        btnPen.isSelected         = false
+        btnHighlighter.isSelected = false
+        btnText.isSelected        = false
+        btnEraser.isSelected      = false
 
         btnToggleSeekBar.setOnClickListener {
             isSeekBarActive = !isSeekBarActive
@@ -87,7 +117,6 @@ class MainActivity : AppCompatActivity() {
             btnToggleSeekBar.setImageResource(icon)
         }
 
-        btnPlay = findViewById(R.id.btnPlay)
         btnPlay.setOnClickListener {
             currentPdfFile?.let {
                 val intent = Intent(this, PlayActivity::class.java).apply {
@@ -101,13 +130,66 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        btnPen.setOnClickListener        { toggleTool(Tool.PEN, btnPen) }
-        btnHighlighter.setOnClickListener{ toggleTool(Tool.HIGHLIGHTER, btnHighlighter) }
-        btnText.setOnClickListener       { toggleTool(Tool.TEXT, btnText) }
-        btnEraser.setOnClickListener     { toggleTool(Tool.ERASER, btnEraser) }
+        var lastClickTime = 0L
+        btnCanvas.setOnClickListener {
+            val now = System.currentTimeMillis()
+            if (now - lastClickTime < 300) {
+                // 더블탭: 툴 패널 보이기/숨기기
+                canvasToolsPanel.visibility =
+                    if (canvasToolsPanel.visibility == View.GONE) View.VISIBLE
+                    else View.GONE
+            } else {
+                // 싱글탭: 도구 on/off
+                handleSingleTapOnCanvasButton()
+            }
+            lastClickTime = now
+        }
+
+        // 패널 외부 터치 시 닫기
+        val rootLayout = findViewById<View>(R.id.rootLayout)
+        rootLayout.setOnTouchListener { _, event ->
+            if (canvasToolsPanel.visibility == View.VISIBLE && event.action == MotionEvent.ACTION_DOWN) {
+                val rect = Rect()
+                canvasToolsPanel.getGlobalVisibleRect(rect)
+                val x = event.rawX.toInt()
+                val y = event.rawY.toInt()
+                if (!rect.contains(x, y)) {
+                    canvasToolsPanel.visibility = View.GONE
+                }
+            }
+            false
+        }
+
+        btnPen.setOnClickListener         { selectTool(Tool.PEN) }
+        btnHighlighter.setOnClickListener { selectTool(Tool.HIGHLIGHTER) }
+        btnText.setOnClickListener        { selectTool(Tool.TEXT) }
+        btnEraser.setOnClickListener      { selectTool(Tool.ERASER) }
+
+        btnDecreaseSize.setOnClickListener {
+            val currentSize = tvSize.text.toString().toIntOrNull() ?: 48
+            val newSize = (currentSize - 4).coerceAtLeast(4)
+            tvSize.text = "$newSize"
+            adjustPreviewSize(newSize)
+        }
+        btnIncreaseSize.setOnClickListener {
+            val currentSize = tvSize.text.toString().toIntOrNull() ?: 48
+            val newSize = (currentSize + 4).coerceAtMost(200)
+            tvSize.text = "$newSize"
+            adjustPreviewSize(newSize)
+        }
+
+        // 색상 선택 영역(간단히 토글 예시)
+        viewSelectedColor.setOnClickListener {
+            val currentColor = (viewSelectedColor.background as? ColorDrawable)?.color
+                ?: Color.RED
+            val newColor = if (currentColor == Color.RED) Color.BLUE else Color.RED
+            viewSelectedColor.setBackgroundColor(newColor)
+            tvPreview.setTextColor(newColor)
+        }
+
         btnUndo.setOnClickListener { handleUndoOrRedo(isUndo = true) }
         btnRedo.setOnClickListener { handleUndoOrRedo(isUndo = false) }
-        btnSave.setOnClickListener       { showSaveDialog() }
+        btnSave.setOnClickListener { showSaveDialog() }
 
         annotationCanvas.onTextTapListener = { x, y ->
             thumbnailContainer.findViewWithTag<EditText>("inlineEdit")?.let {
@@ -143,25 +225,103 @@ class MainActivity : AppCompatActivity() {
         openFilePicker()
     }
 
-    private fun toggleTool(tool: Tool, button: ImageButton) {
-        if (currentTool == tool) {
-            currentTool = null
-            annotationCanvas.setTool(null)
-            clearAllButtonHighlights()
-            button.alpha = 1f
+    private fun handleSingleTapOnCanvasButton() {
+        if (currentTool == null) {
+                selectTool(Tool.PEN)
+                return
+            }
+        if (!isToolActive) {
+            annotationCanvas.setTool(currentTool)
+            isToolActive = true
+            btnCanvas.alpha = 0.5f
         } else {
-            clearAllButtonHighlights()
-            currentTool = tool
-            annotationCanvas.setTool(tool)
-            button.alpha = 0.5f
+            annotationCanvas.setTool(null)
+            isToolActive = false
+            btnCanvas.alpha = 1f
         }
     }
 
-    private fun clearAllButtonHighlights() {
-        btnPen.alpha = 1f
-        btnHighlighter.alpha = 1f
-        btnText.alpha = 1f
-        btnEraser.alpha = 1f
+    private fun selectTool(tool: Tool) {
+        // 이전에 선택된 버튼들 모두 isSelected = false
+        btnPen.isSelected = false
+        btnHighlighter.isSelected = false
+        btnText.isSelected = false
+        btnEraser.isSelected = false
+
+        // 새로 선택된 버튼만 isSelected = true
+        when (tool) {
+            Tool.PEN         -> btnPen.isSelected = true
+            Tool.HIGHLIGHTER -> btnHighlighter.isSelected = true
+            Tool.TEXT        -> btnText.isSelected = true
+            Tool.ERASER      -> btnEraser.isSelected = true
+        }
+
+        // Canvas 도구 설정
+        annotationCanvas.setTool(tool)
+        currentTool = tool
+        isToolActive = true
+        btnCanvas.alpha = 0.5f
+
+        // 툴 패널 닫기
+        canvasToolsPanel.visibility = View.GONE
+
+        // 미리보기 모드 설정
+        when (tool) {
+            Tool.PEN, Tool.HIGHLIGHTER, Tool.ERASER -> setPreviewMode(PreviewMode.LINE)
+            Tool.TEXT                               -> setPreviewMode(PreviewMode.TEXT)
+        }
+    }
+
+    private enum class PreviewMode { LINE, TEXT, NONE }
+
+    private fun setPreviewMode(mode: PreviewMode) {
+        when (mode) {
+            PreviewMode.LINE -> {
+                tvPreview.visibility = View.VISIBLE
+                tvPreview.text = ""
+                val params = tvPreview.layoutParams
+                val heightPx = (24 * resources.displayMetrics.density).toInt()
+                params.height = heightPx
+                tvPreview.layoutParams = params
+                tvPreview.setBackgroundColor(
+                    (viewSelectedColor.background as? ColorDrawable)?.color
+                        ?: Color.RED
+                )
+            }
+            PreviewMode.TEXT -> {
+                tvPreview.visibility = View.VISIBLE
+                tvPreview.text = "ABC abc 123"
+                val params = tvPreview.layoutParams
+                params.height = ViewGroup.LayoutParams.WRAP_CONTENT
+                tvPreview.layoutParams = params
+                tvPreview.setBackgroundColor(Color.TRANSPARENT)
+                tvPreview.setTextColor(
+                    (viewSelectedColor.background as? ColorDrawable)?.color
+                        ?: Color.RED
+                )
+                val sizeSp = tvSize.text.toString().toFloatOrNull() ?: 48f
+                tvPreview.textSize = sizeSp
+            }
+            PreviewMode.NONE -> {
+                tvPreview.visibility = View.GONE
+            }
+        }
+    }
+
+    // 크기 변화에 따라 미리보기 높이나 글자 크기 동기화
+    private fun adjustPreviewSize(newSize: Int) {
+        when (currentTool) {
+            Tool.PEN, Tool.HIGHLIGHTER, Tool.ERASER -> {
+                tvPreview.text = ""
+                val params = tvPreview.layoutParams
+                params.height = (newSize * resources.displayMetrics.density / 2).toInt().coerceAtLeast(8)
+                tvPreview.layoutParams = params
+            }
+            Tool.TEXT -> {
+                tvPreview.textSize = newSize.toFloat()
+            }
+            else -> {}
+        }
     }
 
     private fun openFilePicker() {
@@ -203,7 +363,6 @@ class MainActivity : AppCompatActivity() {
         val count = pdfManager.pageCount()
 
         viewPager.adapter = PDFPagerAdapter(pdfManager, count, annotationCanvas, viewPager)
-
         annotationCanvas.clearAll()
 
         val prefs = getSharedPreferences("PlaybackPrefs", MODE_PRIVATE)
@@ -237,20 +396,18 @@ class MainActivity : AppCompatActivity() {
 
         if (!::originalPdfBaseName.isInitialized) {
             val display = currentPdfUri?.let { queryFileName(it) }
-                        originalPdfBaseName = display
-                            ?.substringBeforeLast('.')
-                            ?: pdfFile.nameWithoutExtension
+            originalPdfBaseName = display
+                ?.substringBeforeLast('.')
+                ?: pdfFile.nameWithoutExtension
         }
         //동일 이름 MIDI 파일 존재 시 자동 연결
         currentMidiFile = null //초기화
         val midiFile = File(pdfFile.parentFile, pdfFile.nameWithoutExtension + ".mid")
         if (midiFile.exists()) {
             currentMidiFile = midiFile
-        }else {
+        } else {
             prefs.edit().remove("last_midi").apply()
         }
-
-
     }
 
     private fun handleThumbnailRequest(bitmap: Bitmap, x: Int, y: Int) {
@@ -271,6 +428,7 @@ class MainActivity : AppCompatActivity() {
             fragThumbnail?.updateThumbnail(bitmap, x, y)
         }
     }
+
     override fun onResume() {
         super.onResume()
 
@@ -283,10 +441,12 @@ class MainActivity : AppCompatActivity() {
             seekBar.progress = savedPage
         }
     }
+
     override fun onSupportNavigateUp(): Boolean {
         openFilePicker()
         return true
     }
+
     override fun onDestroy() {
         super.onDestroy()
         pdfManager.close()
@@ -375,5 +535,4 @@ class MainActivity : AppCompatActivity() {
             else        annotationCanvas.redoLast()
         }
     }
-
 }

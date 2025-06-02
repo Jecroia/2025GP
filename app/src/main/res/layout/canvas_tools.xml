@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id            ="@+id/panelContainer"
+    android:layout_width  ="wrap_content"
+    android:layout_height ="wrap_content"
+    android:orientation   ="vertical"
+    android:background    ="#FFFFFF"
+    android:padding       ="8dp">
+
+    <!-- 1) 도구 버튼 4개 행 -->
+    <LinearLayout
+        android:layout_width  ="wrap_content"
+        android:layout_height ="wrap_content"
+        android:orientation   ="horizontal"
+        android:gravity       ="center">
+
+        <!-- Pen 버튼 (ID: btnPen) -->
+        <ImageButton
+            android:id            ="@+id/btnPen"
+            android:layout_width  ="48dp"
+            android:layout_height ="48dp"
+            android:layout_marginEnd="4dp"
+            android:background    ="@drawable/tool_button_background"
+            android:src           ="@drawable/tool_pen_24"
+            android:contentDescription="펜"
+            android:scaleType     ="centerInside"/>
+
+        <!-- Highlighter 버튼 (ID: btnHighlighter) -->
+        <ImageButton
+            android:id            ="@+id/btnHighlighter"
+            android:layout_width  ="48dp"
+            android:layout_height ="48dp"
+            android:layout_marginEnd="4dp"
+            android:background    ="@drawable/tool_button_background"
+            android:src           ="@drawable/tool_highlight_24"
+            android:contentDescription="형광펜"
+            android:scaleType     ="centerInside"/>
+
+        <!-- Text 버튼 (ID: btnText) -->
+        <ImageButton
+            android:id            ="@+id/btnText"
+            android:layout_width  ="48dp"
+            android:layout_height ="48dp"
+            android:layout_marginEnd="4dp"
+            android:background    ="@drawable/tool_button_background"
+            android:src           ="@drawable/tool_text_24"
+            android:contentDescription="텍스트"
+            android:scaleType     ="centerInside"/>
+
+        <!-- Eraser 버튼 (ID: btnEraser) -->
+        <ImageButton
+            android:id            ="@+id/btnEraser"
+            android:layout_width  ="48dp"
+            android:layout_height ="48dp"
+            android:background    ="@drawable/tool_button_background"
+            android:src           ="@drawable/tool_eraser_24"
+            android:contentDescription="지우개"
+            android:scaleType     ="centerInside"/>
+    </LinearLayout>
+
+    <!-- 2) 크기 조절 영역 -->
+    <LinearLayout
+        android:layout_width  ="wrap_content"
+        android:layout_height ="wrap_content"
+        android:orientation   ="horizontal"
+        android:gravity       ="center_vertical"
+        android:paddingTop    ="8dp">
+
+        <TextView
+            android:layout_width  ="wrap_content"
+            android:layout_height ="wrap_content"
+            android:text           ="크기:"
+            android:textSize      ="14sp"
+            android:layout_marginEnd="4dp" />
+
+        <Button
+            android:id="@+id/btnDecreaseSize"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:text="-"
+            android:textSize="18sp" />
+
+        <TextView
+            android:id            ="@+id/tvSize"
+            android:layout_width  ="wrap_content"
+            android:layout_height ="wrap_content"
+            android:text           ="48"
+            android:textSize      ="14sp"
+            android:paddingHorizontal="8dp" />
+
+        <Button
+            android:id="@+id/btnIncreaseSize"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:text="+"
+            android:textSize="18sp" />
+    </LinearLayout>
+
+    <!-- 3) 색상 선택 영역 -->
+    <LinearLayout
+        android:layout_width  ="wrap_content"
+        android:layout_height ="wrap_content"
+        android:orientation   ="horizontal"
+        android:gravity       ="center_vertical"
+        android:paddingTop    ="8dp">
+
+        <TextView
+            android:layout_width  ="wrap_content"
+            android:layout_height ="wrap_content"
+            android:text           ="색:"
+            android:textSize      ="14sp"
+            android:layout_marginEnd="4dp" />
+
+        <View
+            android:id            ="@+id/viewSelectedColor"
+            android:layout_width  ="32dp"
+            android:layout_height ="32dp"
+            android:background     ="#FF0000"
+            android:layout_marginStart="4dp" />
+    </LinearLayout>
+
+    <!-- 4) 네모박스 안에 미리보기(TextView 하나로 처리) -->
+    <FrameLayout
+        android:id            ="@+id/preview_outer"
+        android:layout_width  ="match_parent"
+        android:layout_height ="wrap_content"
+        android:layout_marginTop="12dp"
+        android:background    ="#000000"
+        android:padding       ="1dp">
+
+        <TextView
+            android:id            ="@+id/tvPreview"
+            android:layout_width  ="match_parent"
+            android:layout_height ="wrap_content"
+            android:background    ="#FFFFFF"
+            android:padding       ="8dp"
+            android:text           =""
+            android:textColor     ="#FF0000"
+            android:textSize      ="48sp"
+            android:gravity       ="center" />
+    </FrameLayout>
+
+</LinearLayout>

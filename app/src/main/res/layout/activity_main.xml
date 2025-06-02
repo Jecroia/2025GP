@@ -3,6 +3,7 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app   ="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
+    android:id ="@+id/rootLayout"
     android:fitsSystemWindows="true"
     android:layout_width ="match_parent"
     android:layout_height="match_parent"
@@ -10,87 +11,68 @@
 
     <!-- 툴바 -->
     <androidx.appcompat.widget.Toolbar
-        android:id       ="@+id/toolbar"
-        android:layout_width ="match_parent"
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
-        android:background   ="?attr/colorPrimary"
-        android:elevation    ="8dp"
-        app:popupTheme       ="@style/ThemeOverlay.AppCompat.Light">
+        android:background="?attr/colorPrimary"
+        android:elevation="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:popupTheme="@style/ThemeOverlay.AppCompat.Light">
 
         <ImageButton
-            android:id             ="@+id/btnToggleSeekBar"
-            android:layout_width   ="wrap_content"
-            android:layout_height  ="wrap_content"
-            android:layout_gravity ="end"
-            android:background      ="@android:color/transparent"
-            android:padding         ="8dp"
-            android:src             ="@drawable/baseline_toggle_off_24"
-            android:contentDescription="토글"/>
+            android:id="@+id/btnToggleSeekBar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="end"
+            android:background="@android:color/transparent"
+            android:contentDescription="토글"
+            android:padding="8dp"
+            android:src="@drawable/baseline_toggle_off_24" />
+
+        <!-- 툴 패널 토글/도구 토글용 버튼 -->
+        <ImageButton
+            android:id="@+id/btnCanvas"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:layout_gravity="end"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="캔버스 도구 열기/닫기 또는 활성화/비활성화"
+            android:padding="8dp"
+            android:src="@drawable/tool_pen_24" />
 
         <ImageButton
-            android:id            ="@+id/btnPen"
-            android:layout_width  ="wrap_content"
-            android:layout_height ="match_parent"
-            android:src           ="@drawable/tool_pen_24"
-            android:background    ="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="펜"/>
+            android:id="@+id/btnUndo"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="되돌리기"
+            android:src="@drawable/tool_undo_24" />
 
         <ImageButton
-            android:id            ="@+id/btnHighlighter"
-            android:layout_width  ="wrap_content"
-            android:layout_height ="match_parent"
-            android:src           ="@drawable/tool_highlight_24"
-            android:background    ="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="형광펜"/>
-
-        <ImageButton
-            android:id            ="@+id/btnText"
-            android:layout_width  ="wrap_content"
-            android:layout_height ="match_parent"
-            android:src           ="@drawable/tool_text_24"
-            android:background    ="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="텍스트"/>
-
-        <ImageButton
-            android:id            ="@+id/btnEraser"
-            android:layout_width  ="wrap_content"
-            android:layout_height ="match_parent"
-            android:src           ="@drawable/tool_eraser_24"
-            android:background    ="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="지우개"/>
-
-        <ImageButton
-            android:id            ="@+id/btnUndo"
-            android:layout_width  ="wrap_content"
-            android:layout_height ="match_parent"
-            android:src           ="@drawable/tool_undo_24"
-            android:background    ="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="되돌리기"/>
-
-        <ImageButton
-            android:id            ="@+id/btnRedo"
-            android:layout_width  ="wrap_content"
-            android:layout_height ="match_parent"
-            android:src           ="@drawable/tool_redo_24"
-            android:background    ="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="다시실행"/>
+            android:id="@+id/btnRedo"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="다시실행"
+            android:src="@drawable/tool_redo_24" />
 
         <ImageButton
             android:id="@+id/btnPlay"
             android:layout_width="wrap_content"
             android:layout_height="match_parent"
-            android:src="@drawable/ic_play_arrow_24"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="재생"
-            />
+            android:src="@drawable/ic_play_arrow_24" />
 
         <ImageButton
-            android:id            ="@+id/btnSave"
-            android:layout_width  ="wrap_content"
-            android:layout_height ="match_parent"
-            android:src           ="@drawable/tool_save_24"
-            android:background    ="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="저장"/>
+            android:id="@+id/btnSave"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="저장"
+            android:src="@drawable/tool_save_24" />
 
 
     </androidx.appcompat.widget.Toolbar>
@@ -140,4 +122,14 @@
         android:clipChildren ="false"
         android:clipToPadding="false"/>
 
+    <!-- 캔버스 도구 패널 -->
+    <include
+        android:id            ="@+id/canvasToolsPanel"
+        layout               ="@layout/canvas_tools"
+        android:visibility   ="gone"
+        android:layout_width ="wrap_content"
+        android:layout_height="wrap_content"
+        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 </androidx.constraintlayout.widget.ConstraintLayout>
