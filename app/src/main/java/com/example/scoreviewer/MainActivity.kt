@@ -1,4 +1,3 @@
-// MainActivity.kt
 package com.example.scoreviewer
 
 import android.content.Context
@@ -10,8 +9,8 @@ import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
-import android.view.MenuItem
 import android.view.inputmethod.InputMethodManager
+import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
@@ -54,7 +53,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnSave: ImageButton
     private lateinit var btnPlay: ImageButton
 
-    private lateinit var btnCanvas: ImageButton
+    private lateinit var btnCanvas: CanvasToggleButton
     private lateinit var canvasToolsPanel: View
     private lateinit var btnDecreaseSize: Button
     private lateinit var btnIncreaseSize: Button
@@ -62,8 +61,12 @@ class MainActivity : AppCompatActivity() {
     private lateinit var viewSelectedColor: View
     private lateinit var tvPreview: TextView
 
-    private var currentTool: Tool? = null
-    private var isToolActive: Boolean = false
+    private lateinit var gestureDetector: GestureDetector
+    private lateinit var toolController: CanvasToolController
+
+    // "캔버스가 활성(그리기 가능)한 상태인가"를 추적하는 플래그
+    private var isCanvasActive = false
+
     private var isSeekBarActive = true
     private var currentPdfFile: File? = null
     private var currentMidiFile: File? = null
@@ -74,10 +77,12 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // 툴바 설정
         val toolbar: Toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
 
+        // View 초기화
         viewPager = findViewById(R.id.viewPager)
         seekBar = findViewById(R.id.pageSeekBar)
         thumbnailContainer = findViewById(R.id.thumbnail_container)
@@ -102,11 +107,7 @@ class MainActivity : AppCompatActivity() {
         viewSelectedColor = findViewById(R.id.viewSelectedColor)
         tvPreview = findViewById(R.id.tvPreview)
 
-        btnPen.isSelected         = false
-        btnHighlighter.isSelected = false
-        btnText.isSelected        = false
-        btnEraser.isSelected      = false
-
+        // SeekBar 토글 버튼
         btnToggleSeekBar.setOnClickListener {
             isSeekBarActive = !isSeekBarActive
             pageBar?.setSeekBarActive(isSeekBarActive)
@@ -117,6 +118,7 @@ class MainActivity : AppCompatActivity() {
             btnToggleSeekBar.setImageResource(icon)
         }
 
+        // MIDI 재생 버튼
         btnPlay.setOnClickListener {
             currentPdfFile?.let {
                 val intent = Intent(this, PlayActivity::class.java).apply {
@@ -130,41 +132,40 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        var lastClickTime = 0L
-        btnCanvas.setOnClickListener {
-            val now = System.currentTimeMillis()
-            if (now - lastClickTime < 300) {
-                // 더블탭: 툴 패널 보이기/숨기기
-                canvasToolsPanel.visibility =
-                    if (canvasToolsPanel.visibility == View.GONE) View.VISIBLE
-                    else View.GONE
-            } else {
-                // 싱글탭: 도구 on/off
+        // GestureDetector로 btnCanvas에 단일/이중 탭 구분 로직 설정
+        gestureDetector = GestureDetector(this, object : GestureDetector.SimpleOnGestureListener() {
+            override fun onSingleTapConfirmed(e: MotionEvent): Boolean {
+                // 단일 탭 → 캔버스 온/오프 토글
                 handleSingleTapOnCanvasButton()
+                return true
             }
-            lastClickTime = now
+            override fun onDoubleTap(e: MotionEvent): Boolean {
+                // 이중 탭 → 툴 설정 패널 토글
+                handleDoubleTapOnCanvasButton()
+                return true
+            }
+        })
+        btnCanvas.setOnTouchListener { v, event ->
+            gestureDetector.onTouchEvent(event)
+            // GestureDetector가 이벤트를 처리하도록 한 뒤, ACTION_UP 시 performClick() 호출
+            if (event.action == MotionEvent.ACTION_UP) {
+                v.performClick()
+            }
+            true
         }
 
-        // 패널 외부 터치 시 닫기
-        val rootLayout = findViewById<View>(R.id.rootLayout)
-        rootLayout.setOnTouchListener { _, event ->
-            if (canvasToolsPanel.visibility == View.VISIBLE && event.action == MotionEvent.ACTION_DOWN) {
-                val rect = Rect()
-                canvasToolsPanel.getGlobalVisibleRect(rect)
-                val x = event.rawX.toInt()
-                val y = event.rawY.toInt()
-                if (!rect.contains(x, y)) {
-                    canvasToolsPanel.visibility = View.GONE
-                }
-            }
-            false
-        }
+        // CanvasToolController 초기화
+        toolController = CanvasToolController(
+            annotationCanvas = annotationCanvas,
+            btnCanvas = btnCanvas,
+            panelContainer = canvasToolsPanel,
+            btnPen = btnPen,
+            btnHighlighter = btnHighlighter,
+            btnText = btnText,
+            btnEraser = btnEraser
+        )
 
-        btnPen.setOnClickListener         { selectTool(Tool.PEN) }
-        btnHighlighter.setOnClickListener { selectTool(Tool.HIGHLIGHTER) }
-        btnText.setOnClickListener        { selectTool(Tool.TEXT) }
-        btnEraser.setOnClickListener      { selectTool(Tool.ERASER) }
-
+        // 도구 크기/색상/미리보기 로직
         btnDecreaseSize.setOnClickListener {
             val currentSize = tvSize.text.toString().toIntOrNull() ?: 48
             val newSize = (currentSize - 4).coerceAtLeast(4)
@@ -225,53 +226,32 @@ class MainActivity : AppCompatActivity() {
         openFilePicker()
     }
 
+    /**
+     * 단일 탭: 캔버스(on/off) 토글
+     * - isCanvasActive 플래그로 상태 관리
+     * - OFF 상태일 때: AnnotationCanvasView.setTool(null) 호출 → 그리기 비활성화
+     * - ON 상태일 때: AnnotationCanvasView.setTool(currentTool) 호출 → 그리기 활성화
+     */
     private fun handleSingleTapOnCanvasButton() {
-        if (currentTool == null) {
-                selectTool(Tool.PEN)
-                return
-            }
-        if (!isToolActive) {
-            annotationCanvas.setTool(currentTool)
-            isToolActive = true
+        if (!isCanvasActive) {
+            // 캔버스가 꺼져 있으면, 현재 선택된 도구로 켜기
+            isCanvasActive = true
+            annotationCanvas.setTool(toolController.getCurrentTool())
             btnCanvas.alpha = 0.5f
         } else {
+            // 캔버스가 켜져 있으면, 끄기 (setTool(null)로 그리기 비활성화)
+            isCanvasActive = false
             annotationCanvas.setTool(null)
-            isToolActive = false
             btnCanvas.alpha = 1f
         }
     }
 
-    private fun selectTool(tool: Tool) {
-        // 이전에 선택된 버튼들 모두 isSelected = false
-        btnPen.isSelected = false
-        btnHighlighter.isSelected = false
-        btnText.isSelected = false
-        btnEraser.isSelected = false
-
-        // 새로 선택된 버튼만 isSelected = true
-        when (tool) {
-            Tool.PEN         -> btnPen.isSelected = true
-            Tool.HIGHLIGHTER -> btnHighlighter.isSelected = true
-            Tool.TEXT        -> btnText.isSelected = true
-            Tool.ERASER      -> btnEraser.isSelected = true
-        }
-
-        // Canvas 도구 설정
-        annotationCanvas.setTool(tool)
-        currentTool = tool
-        isToolActive = true
-        btnCanvas.alpha = 0.5f
-
-        // 툴 패널 닫기
-        canvasToolsPanel.visibility = View.GONE
-
-        // 미리보기 모드 설정
-        when (tool) {
-            Tool.PEN, Tool.HIGHLIGHTER, Tool.ERASER -> setPreviewMode(PreviewMode.LINE)
-            Tool.TEXT                               -> setPreviewMode(PreviewMode.TEXT)
-        }
+    /** 이중 탭: 툴 설정 패널 토글 */
+    private fun handleDoubleTapOnCanvasButton() {
+        toolController.togglePanel()
     }
 
+    /** 미리보기 모드 (LINE / TEXT / NONE) */
     private enum class PreviewMode { LINE, TEXT, NONE }
 
     private fun setPreviewMode(mode: PreviewMode) {
@@ -308,22 +288,27 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // 크기 변화에 따라 미리보기 높이나 글자 크기 동기화
+    /**
+     * 도구(페인트/형광펜/지우개/텍스트)에 맞춰서 미리보기 크기 조절
+     * - PEN/HIGHLIGHTER/ERASER: 선 굵기 형태로 높이만 조절
+     * - TEXT: 텍스트 크기 조절
+     */
     private fun adjustPreviewSize(newSize: Int) {
-        when (currentTool) {
+        when (toolController.getCurrentTool()) {
             Tool.PEN, Tool.HIGHLIGHTER, Tool.ERASER -> {
                 tvPreview.text = ""
                 val params = tvPreview.layoutParams
-                params.height = (newSize * resources.displayMetrics.density / 2).toInt().coerceAtLeast(8)
+                params.height = (newSize * resources.displayMetrics.density / 2)
+                    .toInt().coerceAtLeast(8)
                 tvPreview.layoutParams = params
             }
             Tool.TEXT -> {
                 tvPreview.textSize = newSize.toFloat()
             }
-            else -> {}
         }
     }
 
+    /** PDF 파일 선택 위한 Intent */
     private fun openFilePicker() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
@@ -344,6 +329,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** Uri를 임시 파일로 복사 */
     private fun copyUriToTempFile(uri: Uri): File? = try {
         contentResolver.openInputStream(uri)?.use { input ->
             File.createTempFile("selected_pdf", ".pdf", cacheDir).apply {
@@ -355,8 +341,8 @@ class MainActivity : AppCompatActivity() {
         null
     }
 
+    /** PDF 열어서 ViewPager에 연결 */
     private fun openPdf(pdfFile: File) {
-
         viewPager.offscreenPageLimit = 1
         currentPdfFile = pdfFile
         pdfManager.open(pdfFile.absolutePath)
@@ -382,7 +368,7 @@ class MainActivity : AppCompatActivity() {
             override fun onPageSelected(position: Int) {
                 seekBar.progress = position
                 annotationCanvas.setPage(position)
-
+                // 현재 페이지의 transformation matrix도 넘겨 줌
                 val rv = viewPager.getChildAt(0) as? RecyclerView
                 val holder = rv
                     ?.findViewHolderForAdapterPosition(position)
@@ -400,8 +386,8 @@ class MainActivity : AppCompatActivity() {
                 ?.substringBeforeLast('.')
                 ?: pdfFile.nameWithoutExtension
         }
-        //동일 이름 MIDI 파일 존재 시 자동 연결
-        currentMidiFile = null //초기화
+
+        currentMidiFile = null
         val midiFile = File(pdfFile.parentFile, pdfFile.nameWithoutExtension + ".mid")
         if (midiFile.exists()) {
             currentMidiFile = midiFile
@@ -431,7 +417,6 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-
         val prefs = getSharedPreferences("PlaybackPrefs", MODE_PRIVATE)
         val savedPage = prefs.getInt("last_page", -1)
         val savedPdfPath = prefs.getString("last_pdf", null)
@@ -452,7 +437,7 @@ class MainActivity : AppCompatActivity() {
         pdfManager.close()
     }
 
-    override fun onOptionsItemSelected(item: MenuItem): Boolean =
+    override fun onOptionsItemSelected(item: android.view.MenuItem): Boolean =
         when (item.itemId) {
             android.R.id.home -> {
                 openFilePicker()
@@ -461,6 +446,7 @@ class MainActivity : AppCompatActivity() {
             else -> super.onOptionsItemSelected(item)
         }
 
+    /** 저장 다이얼로그 표시 */
     private fun showSaveDialog() {
         // 다이얼로그 뷰 inflate
         val dialogView = layoutInflater.inflate(R.layout.dialog_save_options, null)
@@ -472,7 +458,7 @@ class MainActivity : AppCompatActivity() {
         // 기본 파일명 계산
         val filesDir = getExternalFilesDir(null)!!
         val baseName = "${originalPdfBaseName}_sv"
-        val count    = filesDir.listFiles { f ->
+        val count = filesDir.listFiles { f ->
             f.extension.equals("pdf", ignoreCase = true)
                     && f.nameWithoutExtension.startsWith(baseName)
         }?.size ?: 0
@@ -500,6 +486,7 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
+    /** Uri에서 파일 이름 추출 */
     private fun queryFileName(uri: Uri): String? {
         contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) {
@@ -509,6 +496,7 @@ class MainActivity : AppCompatActivity() {
         return null
     }
 
+    /** undo/redo 처리 */
     private fun handleUndoOrRedo(isUndo: Boolean) {
         val target = if (isUndo) annotationCanvas.peekUndo()
         else         annotationCanvas.peekRedo()
@@ -534,5 +522,20 @@ class MainActivity : AppCompatActivity() {
             if (isUndo) annotationCanvas.undoLast()
             else        annotationCanvas.redoLast()
         }
+    }
+
+    /** 툴 설정 패널이 열려 있는 상태에서, 패널 외부를 터치하면 닫기 */
+    override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
+        if (canvasToolsPanel.visibility == View.VISIBLE && ev.action == MotionEvent.ACTION_DOWN) {
+            val rect = Rect()
+            canvasToolsPanel.getGlobalVisibleRect(rect)
+            val x = ev.rawX.toInt()
+            val y = ev.rawY.toInt()
+            if (!rect.contains(x, y)) {
+                canvasToolsPanel.visibility = View.GONE
+                return false
+            }
+        }
+        return super.dispatchTouchEvent(ev)
     }
 }

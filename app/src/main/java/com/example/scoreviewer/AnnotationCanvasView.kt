@@ -88,15 +88,22 @@ class AnnotationCanvasView @JvmOverloads constructor(
     }
 
     override fun onTouchEvent(ev: MotionEvent): Boolean {
+        // ① 두 손가락 이상(핀치)이 감지되면 Canvas 자체에서 처리하지 않고,
+        //    false를 반환하여 아래쪽 PDF 뷰로 이벤트를 넘겨줍니다.
+        if (ev.pointerCount > 1) {
+            return false
+        }
+
+        // ② 기존 한 손가락 그리기 로직 그대로 유지
         val tool = currentTool ?: return false  // PDF 스크롤 방지를 위한 기존 로직
 
-        // ① 화면 좌표 → 모델 좌표 변환
+        // 화면 좌표 → 모델 좌표 변환
         val touchPoint = floatArrayOf(ev.x, ev.y)
         inverseImageTransformationMatrix.mapPoints(touchPoint)
         val modelX = touchPoint[0]
         val modelY = touchPoint[1]
 
-        // ② 페이지별 히스토리와 redo 스택 초기화
+        // 페이지별 히스토리와 redo 스택 초기화
         val history = pageToHistory.getOrPut(currentPage) { mutableListOf() }
         globalRedoStack.clear()
 
@@ -161,7 +168,6 @@ class AnnotationCanvasView @JvmOverloads constructor(
         }
         return true
     }
-
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)

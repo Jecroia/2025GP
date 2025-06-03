@@ -32,15 +32,13 @@
             android:src="@drawable/baseline_toggle_off_24" />
 
         <!-- 툴 패널 토글/도구 토글용 버튼 -->
-        <ImageButton
+        <com.example.scoreviewer.CanvasToggleButton
             android:id="@+id/btnCanvas"
-            android:layout_width="wrap_content"
-            android:layout_height="match_parent"
-            android:layout_gravity="end"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:src="@drawable/tool_pen_24"
             android:contentDescription="캔버스 도구 열기/닫기 또는 활성화/비활성화"
-            android:padding="8dp"
-            android:src="@drawable/tool_pen_24" />
+            android:background="?attr/selectableItemBackgroundBorderless"/>
 
         <ImageButton
             android:id="@+id/btnUndo"
