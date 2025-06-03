@@ -5,7 +5,6 @@ import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.Rect
-import android.graphics.drawable.ColorDrawable
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
@@ -13,7 +12,6 @@ import android.view.inputmethod.InputMethodManager
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
-import android.view.ViewGroup
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
 import android.widget.EditText
@@ -28,6 +26,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
+import com.larswerkman.holocolorpicker.ColorPicker
 import java.io.File
 
 class MainActivity : AppCompatActivity() {
@@ -55,18 +54,16 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var btnCanvas: CanvasToggleButton
     private lateinit var canvasToolsPanel: View
+    private lateinit var canvasPreviewSize: TextView
+    private lateinit var canvasPreviewColor: View
     private lateinit var btnDecreaseSize: Button
     private lateinit var btnIncreaseSize: Button
-    private lateinit var tvSize: TextView
-    private lateinit var viewSelectedColor: View
-    private lateinit var tvPreview: TextView
-
     private lateinit var gestureDetector: GestureDetector
     private lateinit var toolController: CanvasToolController
+    private lateinit var canvasPreview: CanvasPreview
+    private lateinit var colorPicker: ColorPicker
 
-    // "캔버스가 활성(그리기 가능)한 상태인가"를 추적하는 플래그
     private var isCanvasActive = false
-
     private var isSeekBarActive = true
     private var currentPdfFile: File? = null
     private var currentMidiFile: File? = null
@@ -101,11 +98,12 @@ class MainActivity : AppCompatActivity() {
         btnSave = findViewById(R.id.btnSave)
         btnPlay = findViewById(R.id.btnPlay)
 
+        canvasPreviewSize = findViewById(R.id.canvasPreviewSize)
+        canvasPreviewColor = findViewById(R.id.canvasPreviewColor)
         btnDecreaseSize = findViewById(R.id.btnDecreaseSize)
         btnIncreaseSize = findViewById(R.id.btnIncreaseSize)
-        tvSize = findViewById(R.id.tvSize)
-        viewSelectedColor = findViewById(R.id.viewSelectedColor)
-        tvPreview = findViewById(R.id.tvPreview)
+        canvasPreview = findViewById(R.id.CanvasPreview)
+        colorPicker = findViewById(R.id.colorPicker)
 
         // SeekBar 토글 버튼
         btnToggleSeekBar.setOnClickListener {
@@ -154,7 +152,6 @@ class MainActivity : AppCompatActivity() {
             true
         }
 
-        // CanvasToolController 초기화
         toolController = CanvasToolController(
             annotationCanvas = annotationCanvas,
             btnCanvas = btnCanvas,
@@ -162,31 +159,16 @@ class MainActivity : AppCompatActivity() {
             btnPen = btnPen,
             btnHighlighter = btnHighlighter,
             btnText = btnText,
-            btnEraser = btnEraser
+            btnEraser = btnEraser,
+
+            // 크기/색상 조절용 뷰
+            btnIncreaseSize = btnIncreaseSize,
+            btnDecreaseSize = btnDecreaseSize,
+            canvasPreviewColor = canvasPreviewColor,
+            canvasPreviewSize = canvasPreviewSize,
+            colorPicker         = colorPicker
         )
-
-        // 도구 크기/색상/미리보기 로직
-        btnDecreaseSize.setOnClickListener {
-            val currentSize = tvSize.text.toString().toIntOrNull() ?: 48
-            val newSize = (currentSize - 4).coerceAtLeast(4)
-            tvSize.text = "$newSize"
-            adjustPreviewSize(newSize)
-        }
-        btnIncreaseSize.setOnClickListener {
-            val currentSize = tvSize.text.toString().toIntOrNull() ?: 48
-            val newSize = (currentSize + 4).coerceAtMost(200)
-            tvSize.text = "$newSize"
-            adjustPreviewSize(newSize)
-        }
-
-        // 색상 선택 영역(간단히 토글 예시)
-        viewSelectedColor.setOnClickListener {
-            val currentColor = (viewSelectedColor.background as? ColorDrawable)?.color
-                ?: Color.RED
-            val newColor = if (currentColor == Color.RED) Color.BLUE else Color.RED
-            viewSelectedColor.setBackgroundColor(newColor)
-            tvPreview.setTextColor(newColor)
-        }
+        toolController.bindPreview(canvasPreview)
 
         btnUndo.setOnClickListener { handleUndoOrRedo(isUndo = true) }
         btnRedo.setOnClickListener { handleUndoOrRedo(isUndo = false) }
@@ -249,63 +231,6 @@ class MainActivity : AppCompatActivity() {
     /** 이중 탭: 툴 설정 패널 토글 */
     private fun handleDoubleTapOnCanvasButton() {
         toolController.togglePanel()
-    }
-
-    /** 미리보기 모드 (LINE / TEXT / NONE) */
-    private enum class PreviewMode { LINE, TEXT, NONE }
-
-    private fun setPreviewMode(mode: PreviewMode) {
-        when (mode) {
-            PreviewMode.LINE -> {
-                tvPreview.visibility = View.VISIBLE
-                tvPreview.text = ""
-                val params = tvPreview.layoutParams
-                val heightPx = (24 * resources.displayMetrics.density).toInt()
-                params.height = heightPx
-                tvPreview.layoutParams = params
-                tvPreview.setBackgroundColor(
-                    (viewSelectedColor.background as? ColorDrawable)?.color
-                        ?: Color.RED
-                )
-            }
-            PreviewMode.TEXT -> {
-                tvPreview.visibility = View.VISIBLE
-                tvPreview.text = "ABC abc 123"
-                val params = tvPreview.layoutParams
-                params.height = ViewGroup.LayoutParams.WRAP_CONTENT
-                tvPreview.layoutParams = params
-                tvPreview.setBackgroundColor(Color.TRANSPARENT)
-                tvPreview.setTextColor(
-                    (viewSelectedColor.background as? ColorDrawable)?.color
-                        ?: Color.RED
-                )
-                val sizeSp = tvSize.text.toString().toFloatOrNull() ?: 48f
-                tvPreview.textSize = sizeSp
-            }
-            PreviewMode.NONE -> {
-                tvPreview.visibility = View.GONE
-            }
-        }
-    }
-
-    /**
-     * 도구(페인트/형광펜/지우개/텍스트)에 맞춰서 미리보기 크기 조절
-     * - PEN/HIGHLIGHTER/ERASER: 선 굵기 형태로 높이만 조절
-     * - TEXT: 텍스트 크기 조절
-     */
-    private fun adjustPreviewSize(newSize: Int) {
-        when (toolController.getCurrentTool()) {
-            Tool.PEN, Tool.HIGHLIGHTER, Tool.ERASER -> {
-                tvPreview.text = ""
-                val params = tvPreview.layoutParams
-                params.height = (newSize * resources.displayMetrics.density / 2)
-                    .toInt().coerceAtLeast(8)
-                tvPreview.layoutParams = params
-            }
-            Tool.TEXT -> {
-                tvPreview.textSize = newSize.toFloat()
-            }
-        }
     }
 
     /** PDF 파일 선택 위한 Intent */

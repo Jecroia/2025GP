@@ -1,77 +1,78 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id            ="@+id/panelContainer"
-    android:layout_width  ="wrap_content"
-    android:layout_height ="wrap_content"
-    android:orientation   ="vertical"
-    android:background    ="#FFFFFF"
-    android:padding       ="8dp">
+    android:id="@+id/panelContainer"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="#FFFFFF"
+    android:padding="8dp">
 
     <!-- 1) 도구 버튼 4개 행 -->
     <LinearLayout
-        android:layout_width  ="wrap_content"
-        android:layout_height ="wrap_content"
-        android:orientation   ="horizontal"
-        android:gravity       ="center">
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center">
 
-        <!-- Pen 버튼 (ID: btnPen) -->
+        <!-- Pen 버튼 -->
         <ImageButton
-            android:id            ="@+id/btnPen"
-            android:layout_width  ="48dp"
-            android:layout_height ="48dp"
+            android:id="@+id/btnPen"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_marginEnd="4dp"
-            android:background    ="@drawable/tool_button_background"
-            android:src           ="@drawable/tool_pen_24"
+            android:background="@drawable/tool_button_background"
+            android:src="@drawable/tool_pen_24"
             android:contentDescription="펜"
-            android:scaleType     ="centerInside"/>
+            android:scaleType="centerInside"/>
 
-        <!-- Highlighter 버튼 (ID: btnHighlighter) -->
+        <!-- Highlighter 버튼 -->
         <ImageButton
-            android:id            ="@+id/btnHighlighter"
-            android:layout_width  ="48dp"
-            android:layout_height ="48dp"
+            android:id="@+id/btnHighlighter"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_marginEnd="4dp"
-            android:background    ="@drawable/tool_button_background"
-            android:src           ="@drawable/tool_highlight_24"
+            android:background="@drawable/tool_button_background"
+            android:src="@drawable/tool_highlight_24"
             android:contentDescription="형광펜"
-            android:scaleType     ="centerInside"/>
+            android:scaleType="centerInside"/>
 
-        <!-- Text 버튼 (ID: btnText) -->
+        <!-- Text 버튼 -->
         <ImageButton
-            android:id            ="@+id/btnText"
-            android:layout_width  ="48dp"
-            android:layout_height ="48dp"
+            android:id="@+id/btnText"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
             android:layout_marginEnd="4dp"
-            android:background    ="@drawable/tool_button_background"
-            android:src           ="@drawable/tool_text_24"
+            android:background="@drawable/tool_button_background"
+            android:src="@drawable/tool_text_24"
             android:contentDescription="텍스트"
-            android:scaleType     ="centerInside"/>
+            android:scaleType="centerInside"/>
 
-        <!-- Eraser 버튼 (ID: btnEraser) -->
+        <!-- Eraser 버튼 -->
         <ImageButton
-            android:id            ="@+id/btnEraser"
-            android:layout_width  ="48dp"
-            android:layout_height ="48dp"
-            android:background    ="@drawable/tool_button_background"
-            android:src           ="@drawable/tool_eraser_24"
+            android:id="@+id/btnEraser"
+            android:layout_width ="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/tool_button_background"
+            android:src="@drawable/tool_eraser_24"
             android:contentDescription="지우개"
-            android:scaleType     ="centerInside"/>
+            android:scaleType="centerInside"/>
     </LinearLayout>
 
     <!-- 2) 크기 조절 영역 -->
     <LinearLayout
-        android:layout_width  ="wrap_content"
-        android:layout_height ="wrap_content"
-        android:orientation   ="horizontal"
-        android:gravity       ="center_vertical"
-        android:paddingTop    ="8dp">
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="8dp">
 
         <TextView
-            android:layout_width  ="wrap_content"
-            android:layout_height ="wrap_content"
-            android:text           ="크기:"
-            android:textSize      ="14sp"
+            android:id="@+id/canvasPreviewSizeLabel"
+            android:layout_width ="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="크기:"
+            android:textSize="14sp"
             android:layout_marginEnd="4dp" />
 
         <Button
@@ -81,12 +82,13 @@
             android:text="-"
             android:textSize="18sp" />
 
+        <!-- 기존에 있던 "canvasPreviewSize" TextView가 바로 사이즈 숫자를 표시합니다. -->
         <TextView
-            android:id            ="@+id/tvSize"
-            android:layout_width  ="wrap_content"
-            android:layout_height ="wrap_content"
-            android:text           ="48"
-            android:textSize      ="14sp"
+            android:id="@+id/canvasPreviewSize"
+            android:layout_width ="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="48"
+            android:textSize="14sp"
             android:paddingHorizontal="8dp" />
 
         <Button
@@ -99,46 +101,51 @@
 
     <!-- 3) 색상 선택 영역 -->
     <LinearLayout
-        android:layout_width  ="wrap_content"
-        android:layout_height ="wrap_content"
-        android:orientation   ="horizontal"
-        android:gravity       ="center_vertical"
-        android:paddingTop    ="8dp">
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingTop="8dp">
 
         <TextView
-            android:layout_width  ="wrap_content"
-            android:layout_height ="wrap_content"
-            android:text           ="색:"
-            android:textSize      ="14sp"
+            android:id="@+id/canvasPreviewColorLabel"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="색:"
+            android:textSize="14sp"
             android:layout_marginEnd="4dp" />
 
+        <!-- 기존에 있던 View id="viewSelectedColor" 그대로 둡니다. -->
         <View
-            android:id            ="@+id/viewSelectedColor"
-            android:layout_width  ="32dp"
-            android:layout_height ="32dp"
-            android:background     ="#FF0000"
-            android:layout_marginStart="4dp" />
+            android:id="@+id/canvasPreviewColor"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="4dp"
+            android:background="#FF0000" />
     </LinearLayout>
 
-    <!-- 4) 네모박스 안에 미리보기(TextView 하나로 처리) -->
-    <FrameLayout
-        android:id            ="@+id/preview_outer"
-        android:layout_width  ="match_parent"
-        android:layout_height ="wrap_content"
-        android:layout_marginTop="12dp"
-        android:background    ="#000000"
-        android:padding       ="1dp">
+    <!-- 3-1) HoloColorPicker 뷰를 삽입할 영역 -->
+    <com.larswerkman.holocolorpicker.ColorPicker
+        android:id="@+id/colorPicker"
+        android:layout_width="200dp"
+        android:layout_height="200dp"
+        android:layout_marginTop="8dp"
+        android:visibility="gone" />
 
-        <TextView
-            android:id            ="@+id/tvPreview"
-            android:layout_width  ="match_parent"
-            android:layout_height ="wrap_content"
-            android:background    ="#FFFFFF"
-            android:padding       ="8dp"
-            android:text           =""
-            android:textColor     ="#FF0000"
-            android:textSize      ="48sp"
-            android:gravity       ="center" />
+    <!-- 4) 프리뷰 영역 (기존 PreviewOuter) -->
+    <FrameLayout
+        android:id="@+id/preview_outer"
+        android:layout_width="match_parent"
+        android:layout_height="100dp"
+        android:layout_marginTop="12dp"
+        android:background="@drawable/bg_preview_border"
+        android:padding="1dp">
+
+        <!-- PreviewCanvasView를 넣습니다. -->
+        <com.example.scoreviewer.CanvasPreview
+            android:id="@+id/CanvasPreview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
     </FrameLayout>
 
 </LinearLayout>
