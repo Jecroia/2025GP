@@ -1,6 +1,7 @@
 package com.example.scoreviewer
 
 import android.content.Intent
+import android.content.SharedPreferences
 import android.database.Cursor
 import android.graphics.Color
 import android.net.Uri
@@ -8,6 +9,8 @@ import android.os.Bundle
 import android.provider.OpenableColumns
 import android.util.Log
 import android.view.WindowManager
+import android.widget.Button
+import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.SeekBar
 import android.widget.TextView
@@ -33,6 +36,9 @@ class PlayActivity : AppCompatActivity() {
     private lateinit var syncPanelManager: SyncPanelManager
     private lateinit var playbackState: PlaybackState
 
+    private lateinit var syncOffsetInput: EditText
+    private lateinit var startDelayInput: EditText
+
     private var pageCount = 0
     private var pdfPath: String? = null
     private var midiPath: String? = null
@@ -41,7 +47,22 @@ class PlayActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_play)
 
+        pdfPath = intent.getStringExtra("pdfPath")
         initializeViews()
+
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val resetPrefs = intent.getBooleanExtra("resetPrefs", false)
+
+        if (resetPrefs && pdfPath != null) {
+            clearPdfSpecificSettings(prefs, pdfPath!!)
+        } else if (pdfPath != null) {
+            loadPdfSpecificSettings(prefs, pdfPath!!)
+        }
+
+        findViewById<Button>(R.id.btnApplySync).setOnClickListener {
+            applyPdfSpecificSettings(prefs, pdfPath)
+        }
+
         setupToolbar()
         setupPlaybackManager()
         setupSyncPanel()
@@ -58,6 +79,8 @@ class PlayActivity : AppCompatActivity() {
         timeText = findViewById(R.id.txtCurrentTime)
         annotationCanvas = findViewById(R.id.annotationCanvas)
         pdfManager = PdfManager()
+        syncOffsetInput = findViewById(R.id.editSyncOffset)
+        startDelayInput = findViewById(R.id.editStartDelay)
     }
 
     private fun setupToolbar() {
@@ -212,13 +235,13 @@ class PlayActivity : AppCompatActivity() {
         val currentFormatted = formatMillis(currentMillis.toLong())
         val totalFormatted = formatMillis(totalMillis.toLong())
         midiSeekBar.progress = currentMillis
-        
+
         if (midiPlaybackManager.isInCountdown()) {
             timeText.setTextColor(Color.RED)
         } else {
             timeText.setTextColor(Color.WHITE)
         }
-        
+
         timeText.text = "$currentFormatted / $totalFormatted"
     }
 
@@ -275,7 +298,7 @@ class PlayActivity : AppCompatActivity() {
                 ?: throw IOException("파일을 열 수 없습니다")
 
             val tempMidi = File.createTempFile("selected_midi", ".mid", cacheDir)
-            tempMidi.outputStream().use { output -> 
+            tempMidi.outputStream().use { output ->
                 inputStream.copyTo(output)
             }
 
@@ -333,6 +356,41 @@ class PlayActivity : AppCompatActivity() {
         val seconds = totalSec % 60
         val sign = if (ms < 0) "-" else ""
         return String.format("%s%02d:%02d", sign, abs(minutes), abs(seconds))
+    }
+
+    private fun clearPdfSpecificSettings(prefs: SharedPreferences, pdfPath: String) {
+        val pdfHash = pdfPath.hashCode()
+        prefs.edit().apply {
+            remove("sync_offset_ms_$pdfHash")
+            remove("start_delay_sec_$pdfHash")
+            apply()
+        }
+        syncOffsetInput.setText("")
+        startDelayInput.setText("")
+        startDelayInput.setHint("지연 시간(초)")
+    }
+
+    private fun loadPdfSpecificSettings(prefs: SharedPreferences, pdfPath: String) {
+        val pdfHash = pdfPath.hashCode()
+        val syncOffset = prefs.getInt("sync_offset_ms_$pdfHash", 0)
+        val startDelay = prefs.getInt("start_delay_sec_$pdfHash", 0)
+        syncOffsetInput.setText(syncOffset.toString())
+        startDelayInput.setText(startDelay.toString())
+    }
+
+    private fun applyPdfSpecificSettings(prefs: SharedPreferences, pdfPath: String?) {
+        pdfPath ?: return
+        val pdfHash = pdfPath.hashCode()
+        val syncValue = syncOffsetInput.text.toString().toIntOrNull()
+        val delayValue = startDelayInput.text.toString().toIntOrNull()
+
+        prefs.edit().apply {
+            if (syncValue != null) putInt("sync_offset_ms_$pdfHash", syncValue)
+            if (delayValue != null) putInt("start_delay_sec_$pdfHash", delayValue)
+            apply()
+        }
+
+        Toast.makeText(this, "싱크 오프셋 및 시작 지연 설정이 적용되었습니다.", Toast.LENGTH_SHORT).show()
     }
 }
 

@@ -1,4 +1,3 @@
-// MainActivity.kt
 package com.example.scoreviewer
 
 import android.content.Context
@@ -9,8 +8,8 @@ import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.view.MenuItem
-import android.view.inputmethod.InputMethodManager
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
@@ -21,6 +20,7 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import java.io.File
@@ -30,7 +30,6 @@ class MainActivity : AppCompatActivity() {
     private val pdfManager = PdfManager()
     private var currentPdfUri: Uri? = null
     private lateinit var originalPdfBaseName: String
-
     private lateinit var viewPager: ViewPager2
     private lateinit var seekBar: SeekBar
     private lateinit var thumbnailContainer: FrameLayout
@@ -59,6 +58,21 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
+        // 앱 최초 실행 시 모든 설정 초기화
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val isFirstRun = prefs.getBoolean("is_first_run", true)
+        if (isFirstRun) {
+            getSharedPreferences("PlaybackPrefs", MODE_PRIVATE).edit().clear().apply()
+            prefs.edit().apply {
+                remove("sync_offset_ms")
+                remove("start_delay_sec")
+                putBoolean("is_first_run", false)
+                apply()
+            }
+            viewPager = findViewById(R.id.viewPager)
+            viewPager.setCurrentItem(0, false)
+        }
+
         val toolbar: Toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
@@ -66,6 +80,13 @@ class MainActivity : AppCompatActivity() {
         viewPager = findViewById(R.id.viewPager)
         seekBar = findViewById(R.id.pageSeekBar)
         thumbnailContainer = findViewById(R.id.thumbnail_container)
+
+        // 최초 실행 시 ViewPager 페이지 초기화
+        val sharedPrefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val firstRun = sharedPrefs.getBoolean("is_first_run", true)
+        if (firstRun) {
+            viewPager.setCurrentItem(0, false)
+        }
 
         annotationCanvas = findViewById(R.id.annotationCanvas)
         btnToggleSeekBar = findViewById(R.id.btnToggleSeekBar)
@@ -90,13 +111,14 @@ class MainActivity : AppCompatActivity() {
         btnPlay = findViewById(R.id.btnPlay)
         btnPlay.setOnClickListener {
             currentPdfFile?.let {
+                val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
+                val isFirstRun = prefs.getBoolean("is_first_run", true)
+
                 val intent = Intent(this, PlayActivity::class.java).apply {
                     putExtra("pdfPath", it.absolutePath)
-                    putExtra("currentPage", viewPager.currentItem)
-                    currentMidiFile?.let { midi ->
-                        putExtra("midiPath", midi.absolutePath)
-                    }
+                    putExtra("resetPrefs", isFirstRun)
                 }
+
                 startActivity(intent)
             }
         }
@@ -235,9 +257,9 @@ class MainActivity : AppCompatActivity() {
 
         if (!::originalPdfBaseName.isInitialized) {
             val display = currentPdfUri?.let { queryFileName(it) }
-                        originalPdfBaseName = display
-                            ?.substringBeforeLast('.')
-                            ?: pdfFile.nameWithoutExtension
+            originalPdfBaseName = display
+                ?.substringBeforeLast('.')
+                ?: pdfFile.nameWithoutExtension
         }
         //동일 이름 MIDI 파일 존재 시 자동 연결
         currentMidiFile = null //초기화

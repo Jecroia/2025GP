@@ -68,17 +68,22 @@ class SyncPanelManager(
 
     private fun loadSavedPreferences() {
         val prefs = PreferenceManager.getDefaultSharedPreferences(context)
-        
-        if (prefs.contains("sync_offset_ms")) {
-            syncOffsetInput.setText(prefs.getInt("sync_offset_ms", 0).toString())
-        } else {
+        val appPrefs = context.getSharedPreferences("AppPrefs", android.content.Context.MODE_PRIVATE)
+        val isFirstRun = appPrefs.getBoolean("isFirstRun", false)
+        if (isFirstRun) {
             syncOffsetInput.setText("")
-        }
-
-        if (prefs.contains("start_delay_sec")) {
-            startDelayInput.setText(prefs.getInt("start_delay_sec", 0).toString())
-        } else {
             startDelayInput.setText("")
+        } else {
+            if (prefs.contains("sync_offset_ms")) {
+                syncOffsetInput.setText(prefs.getInt("sync_offset_ms", 0).toString())
+            } else {
+                syncOffsetInput.setText("")
+            }
+            if (prefs.contains("start_delay_sec")) {
+                startDelayInput.setText(prefs.getInt("start_delay_sec", 0).toString())
+            } else {
+                startDelayInput.setText("")
+            }
         }
     }
 
