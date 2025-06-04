@@ -96,7 +96,7 @@ class CanvasToolController(
                             Tool.TEXT        -> textColor = color
                             else             -> { /* ERASER: 무시 */ }
                         }
-                    updateColorUI()
+                    canvasPreviewColor.setBackgroundColor(color)
                     updatePreviewAndCanvas()
                 }
         })
@@ -235,7 +235,9 @@ class CanvasToolController(
                 Tool.HIGHLIGHTER -> highlighterColor
                 Tool.TEXT        -> textColor
                 Tool.ERASER      -> Color.TRANSPARENT
-            }
+        }
+        colorPicker.setOldCenterColor(c)
+        colorPicker.setColor(c)
         canvasPreviewColor.setBackgroundColor(c)
     }
 

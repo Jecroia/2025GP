@@ -60,8 +60,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnIncreaseSize: Button
     private lateinit var gestureDetector: GestureDetector
     private lateinit var toolController: CanvasToolController
-    private lateinit var canvasPreview: CanvasPreview
     private lateinit var colorPicker: ColorPicker
+    private lateinit var canvasPreview: CanvasPreview
     private lateinit var pageChangeCallback: ViewPager2.OnPageChangeCallback
 
     private var isCanvasActive = false
@@ -103,8 +103,8 @@ class MainActivity : AppCompatActivity() {
         canvasPreviewColor = findViewById(R.id.canvasPreviewColor)
         btnDecreaseSize = findViewById(R.id.btnDecreaseSize)
         btnIncreaseSize = findViewById(R.id.btnIncreaseSize)
-        canvasPreview = findViewById(R.id.CanvasPreview)
         colorPicker = findViewById(R.id.colorPicker)
+        canvasPreview = findViewById(R.id.CanvasPreview)
 
         // SeekBar 토글 버튼
         btnToggleSeekBar.setOnClickListener {
