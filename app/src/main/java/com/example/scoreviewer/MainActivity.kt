@@ -109,16 +109,16 @@ class MainActivity : AppCompatActivity() {
         }
 
         btnPlay = findViewById(R.id.btnPlay)
+
+        // 최초 실행 여부를 onCreate에서 미리 읽어둠
+
         btnPlay.setOnClickListener {
             currentPdfFile?.let {
-                val prefs = androidx.preference.PreferenceManager.getDefaultSharedPreferences(this)
-                val isFirstRun = prefs.getBoolean("is_first_run", true)
-
                 val intent = Intent(this, PlayActivity::class.java).apply {
                     putExtra("pdfPath", it.absolutePath)
+                    // 최초 실행 여부를 미리 읽어둔 값으로 전달
                     putExtra("resetPrefs", isFirstRun)
                 }
-
                 startActivity(intent)
             }
         }
