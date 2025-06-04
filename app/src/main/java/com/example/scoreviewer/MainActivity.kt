@@ -62,6 +62,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var toolController: CanvasToolController
     private lateinit var canvasPreview: CanvasPreview
     private lateinit var colorPicker: ColorPicker
+    private lateinit var pageChangeCallback: ViewPager2.OnPageChangeCallback
 
     private var isCanvasActive = false
     private var isSeekBarActive = true
@@ -289,7 +290,7 @@ class MainActivity : AppCompatActivity() {
             btnToggleSeekBar.setImageResource(R.drawable.baseline_toggle_off_24)
         }
 
-        viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+        pageChangeCallback = object : ViewPager2.OnPageChangeCallback(){
             override fun onPageSelected(position: Int) {
                 seekBar.progress = position
                 annotationCanvas.setPage(position)
@@ -302,7 +303,9 @@ class MainActivity : AppCompatActivity() {
                     annotationCanvas.setTransformationMatrix(it.imageView.imageMatrix)
                 }
             }
-        })
+        }
+
+        viewPager.registerOnPageChangeCallback(pageChangeCallback)
         annotationCanvas.setPage(viewPager.currentItem)
 
         if (!::originalPdfBaseName.isInitialized) {
@@ -359,6 +362,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         super.onDestroy()
+        viewPager.unregisterOnPageChangeCallback(pageChangeCallback)
         pdfManager.close()
     }
 

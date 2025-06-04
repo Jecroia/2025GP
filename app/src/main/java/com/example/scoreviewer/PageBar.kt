@@ -24,28 +24,27 @@ class PageBar(
     private var pendingThumbnailPage: Int? = null
 
     // 캐시: 최대 메모리 1/8 크기 (KB 단위)
-    private val thumbnailCache: LruCache<Int, Bitmap> = run {
-        val maxKb = (Runtime.getRuntime().maxMemory() / 1024).toInt()
-        LruCache(maxKb / 4)
-    }
+    private val maxMemoryKb = (Runtime.getRuntime().maxMemory() / 1024).toInt()
+    private val cacheSizeKb = maxMemoryKb / 8
 
+    private val thumbnailCache: LruCache<Int, Bitmap> = object : LruCache<Int, Bitmap>(cacheSizeKb) {
+        override fun sizeOf(key: Int, value: Bitmap): Int {
+            // value.byteCount는 “전체 바이트 수”이므로, KB 단위로 리턴
+            return value.byteCount / 1024
+        }
+    }
     fun initializeSeekBar(sb: SeekBar) {
         seekBar = sb.apply {
             max = pageCount - 1
 
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onStartTrackingTouch(s: SeekBar?) {
-                    isLongPress = true
-                    updateThumbnail(progress)
+                override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    if (!isLongPress) {
+                        onPageSelected?.invoke(progress)
+                    }
                 }
-                override fun onProgressChanged(s: SeekBar?, progress: Int, fromUser: Boolean) {
-                    if (isLongPress && fromUser) updateThumbnail(progress)
-                }
-                override fun onStopTrackingTouch(s: SeekBar?) {
-                    if (isLongPress) hideThumbnail()
-                    onPageSelected?.invoke(progress)
-                    isLongPress = false
-                }
+                override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+                override fun onStopTrackingTouch(seekBar: SeekBar?) {}
             })
 
             setOnTouchListener { v, ev ->
@@ -59,10 +58,12 @@ class PageBar(
                             updateThumbnail(x)
                         }.also { postDelayed(it, longPressThreshold) }
                     }
-                    MotionEvent.ACTION_MOVE -> if (isLongPress) {
-                        val x = calculateThumbX(ev.x.toInt())
-                        progress = x
-                        updateThumbnail(x)
+                    MotionEvent.ACTION_MOVE -> {
+                        if (isLongPress) {
+                            val x = calculateThumbX(ev.x.toInt())
+                            progress = x
+                            updateThumbnail(x)
+                        }
                     }
                     MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                         longPressRunnable?.let { removeCallbacks(it) }
@@ -95,7 +96,7 @@ class PageBar(
         pendingThumbnailPage = pageIndex
 
         handler.postDelayed({
-            if (pendingThumbnailPage != pageIndex) return@postDelayed  // 최신 요청 아니면 무시
+            if (pendingThumbnailPage != pageIndex) return@postDelayed
             val rendered = renderAndCache(pageIndex)
             showThumbnail(rendered, pageIndex)
         }, 50)
@@ -112,10 +113,11 @@ class PageBar(
 
     private fun renderAndCache(idx: Int): Bitmap {
         val page = pdfManager.loadPage(idx)
-        val pix = page.toPixmap(Matrix.Scale(0.2f), ColorSpace.DeviceRGB, true, true)
+        val pix = page.toPixmap(Matrix.Scale(1.0f), ColorSpace.DeviceRGB, true, true)
         val bmp = Bitmap.createBitmap(pix.width, pix.height, Bitmap.Config.ARGB_8888)
         bmp.setPixels(pix.pixels, 0, pix.width, 0, 0, pix.width, pix.height)
-        pix.destroy(); page.destroy()
+        pix.destroy()
+        page.destroy()
         thumbnailCache.put(idx, bmp)
         return bmp
     }

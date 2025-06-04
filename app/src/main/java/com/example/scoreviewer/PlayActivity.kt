@@ -35,28 +35,11 @@ class PlayActivity : AppCompatActivity() {
         const val KEY_MILLIS = "last_millis"
         const val KEY_PDF_PATH = "last_pdf"
         const val KEY_MIDI_PATH = "last_midi"
-
-        fun loadSessionForPdf(context: Context, pdfPath: String): Pair<Int,Int> {
-            val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
-
-            // 1) 전역 저장값
-            val globalPage   = prefs.getInt(KEY_PAGE,   0)
-            val globalMillis = prefs.getInt(KEY_MILLIS, 0)
-
-            // 2) PDF별 식별자 & 키
-            val f = File(pdfPath)
-            val id = "${f.name}_${f.length()}_${f.lastModified()}"
-            val pdfPage   = prefs.getInt("${id}_page",   globalPage)
-            val pdfMillis = prefs.getInt("${id}_millis", globalMillis)
-
-            return pdfPage to pdfMillis
-        }
     }
 
     private val PICK_MIDI_FILE = 2001
 
     private var isPlaying = false
-    private var restored = false
     private var currentMillis = 0
     private var totalMillis = 0
 
@@ -351,6 +334,10 @@ class PlayActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
+        // PlayActivity가 백그라운드로 갈 때, updateRunnable 예약을 취소
+        if (::updateRunnable.isInitialized) {
+            handler.removeCallbacks(updateRunnable)
+        }
         savePlaybackState()
     }
 
@@ -406,6 +393,13 @@ class PlayActivity : AppCompatActivity() {
                     Toast.makeText(this, "MIDI 파일을 불러올 수 없습니다.", Toast.LENGTH_SHORT).show()
                 }
             }
+        }
+    }
+    override fun onDestroy() {
+        super.onDestroy()
+        // PlayActivity가 완전히 종료될 때 Runnable 예약 취소
+        if (::updateRunnable.isInitialized) {
+            handler.removeCallbacks(updateRunnable)
         }
     }
 }

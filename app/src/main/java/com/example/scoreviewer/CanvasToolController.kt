@@ -39,14 +39,19 @@ class CanvasToolController(
 
     /** 현재 선택된 Tool (기본 PEN) */
     private var currentTool: Tool = Tool.PEN
-    private var selectedColor: Int = Color.RED
-    private var selectedSize: Float = 48f
     private lateinit var canvasPreview: CanvasPreview
+    private var penColor: Int = Color.RED
+    private var penSize: Float = 5f
+    private var highlighterColor: Int = Color.YELLOW
+    private var highlighterSize: Float = 5f
+    private var textColor: Int = Color.RED
+    private var textSize: Float = 48f
 
     init {
         // 앱 시작 시 AnnotationCanvasView에 기본 도구 전달 (1단계에서는 실제 반영해도 무방함)
-        annotationCanvas.setTool(currentTool)
+        annotationCanvas.setTool(null)
         btnCanvas.setImageResource(getIconResForTool(currentTool))
+        btnCanvas.alpha = 1f
 
         // 툴 버튼 클릭 시
         btnPen.setOnClickListener { selectTool(Tool.PEN) }
@@ -56,14 +61,24 @@ class CanvasToolController(
 
         // 크기 증가/감소 버튼 클릭 → selectedSize 변경, UI 갱신, 프리뷰 갱신
         btnIncreaseSize.setOnClickListener {
-            selectedSize += 4f
+            when (currentTool) {
+                    Tool.PEN         -> penSize += 4f
+                    Tool.HIGHLIGHTER -> highlighterSize += 4f
+                    Tool.TEXT        -> textSize += 4f
+                    else             -> { /* ERASER: 동작 없음 */ }
+                }
             updateSizeUI()
-            updatePreview()
+            updatePreviewAndCanvas()
         }
         btnDecreaseSize.setOnClickListener {
-            selectedSize = maxOf(4f, selectedSize - 4f)
+            when (currentTool) {
+                    Tool.PEN         -> penSize = maxOf(1f, penSize - 4f)
+                    Tool.HIGHLIGHTER -> highlighterSize = maxOf(1f, highlighterSize - 4f)
+                    Tool.TEXT        -> textSize = maxOf(8f, textSize - 4f)
+                    else             -> { /* ERASER: 동작 없음 */ }
+                }
             updateSizeUI()
-            updatePreview()
+            updatePreviewAndCanvas()
         }
 
         canvasPreviewColor.setOnClickListener {
@@ -75,10 +90,15 @@ class CanvasToolController(
         }
         colorPicker.setOnColorChangedListener(object : ColorPicker.OnColorChangedListener {
             override fun onColorChanged(color: Int) {
-                selectedColor = color
-                updateColorUI()
-                updatePreview()
-            }
+                    when (currentTool) {
+                            Tool.PEN         -> penColor = color
+                            Tool.HIGHLIGHTER -> highlighterColor = color
+                            Tool.TEXT        -> textColor = color
+                            else             -> { /* ERASER: 무시 */ }
+                        }
+                    updateColorUI()
+                    updatePreviewAndCanvas()
+                }
         })
 
         // 패널 외부 클릭 시 포커스 아웃 → 패널 숨김
@@ -87,12 +107,16 @@ class CanvasToolController(
                 hidePanel()
             }
         }
+
+        updateSizeUI()
+        updateColorUI()
+        updatePreviewAndCanvas()
     }
 
-    /** ② 프리뷰 뷰 연결 메서드 (MainActivity에서 onCreate 시 호출) */
+    /** 프리뷰 뷰 연결 메서드 (MainActivity에서 onCreate 시 호출) */
     fun bindPreview(previewView: CanvasPreview) {
         this.canvasPreview = previewView
-        updatePreview()
+        updatePreviewAndCanvas()
     }
 
     /** 툴 선택 로직. 버튼 아이콘 변경 + (1단계) 프리뷰만 갱신 */
@@ -101,21 +125,64 @@ class CanvasToolController(
         annotationCanvas.setTool(currentTool)
         btnCanvas.setImageResource(getIconResForTool(currentTool))
         updateToolButtonUI()
-        updatePreview()
+        updateSizeUI()
+        updateColorUI()
+        when (currentTool) {
+            Tool.PEN         -> colorPicker.setColor(penColor)
+            Tool.HIGHLIGHTER -> colorPicker.setColor(highlighterColor)
+            Tool.TEXT        -> colorPicker.setColor(textColor)
+            else             -> { /* ERASER일 때는 컬러 휠 숨겨도 상관없음 */ }
+        }
+        updatePreviewAndCanvas()
     }
 
-    /** ③ 버튼/툴 변경 시 호출하여 프리뷰를 갱신 */
-    private fun updatePreview() {
+    /** 버튼/툴 변경 시 호출하여 프리뷰&캔버스 갱신 */
+    private fun updatePreviewAndCanvas() {
         if (!::canvasPreview.isInitialized) return
 
-        canvasPreview.apply {
-            previewColor = selectedColor
-            previewSize = selectedSize
-            toolType = when (currentTool) {
-                Tool.PEN         -> CanvasPreview.ToolType.PEN
-                Tool.HIGHLIGHTER -> CanvasPreview.ToolType.HIGHLIGHTER
-                Tool.TEXT        -> CanvasPreview.ToolType.TEXT
-                else             -> CanvasPreview.ToolType.PEN
+        when (currentTool) {
+            Tool.PEN -> {
+                // 1) Preview: 원형 스트로크
+                canvasPreview.visibility = View.VISIBLE
+                canvasPreview.apply {
+                    previewColor = penColor
+                    previewSize  = penSize
+                    toolType     = CanvasPreview.ToolType.PEN
+                }
+                // 2) 실제 캔버스 반영
+                annotationCanvas.setCustomColor(penColor)
+                annotationCanvas.setCustomSize(penSize)
+            }
+
+            Tool.HIGHLIGHTER -> {
+                // Preview는 (highlighterSize + 4f) 두께
+                val dispSize = highlighterSize + 4f
+                canvasPreview.visibility = View.VISIBLE
+                canvasPreview.apply {
+                    previewColor = highlighterColor
+                    previewSize  = dispSize
+                    toolType     = CanvasPreview.ToolType.HIGHLIGHTER
+                }
+                // 실제 캔버스에는 (highlighterSize + 4f) 넘겨줌
+                annotationCanvas.setCustomColor(highlighterColor)
+                annotationCanvas.setCustomSize(highlighterSize + 4f)
+            }
+
+            Tool.TEXT -> {
+                canvasPreview.visibility = View.VISIBLE
+                canvasPreview.apply {
+                    previewColor = textColor
+                    previewSize  = textSize
+                    toolType     = CanvasPreview.ToolType.TEXT
+                }
+                annotationCanvas.setCustomColor(textColor)
+                annotationCanvas.setCustomSize(textSize)
+            }
+
+            Tool.ERASER -> {
+                // 미리보기 숨기기
+                canvasPreview.visibility = View.GONE
+                // 지우개 모드(AnnotationCanvasView 내부가 자동으로 처리)
             }
         }
     }
@@ -151,15 +218,25 @@ class CanvasToolController(
     /** 현재 선택된 도구 가져오기 */
     fun getCurrentTool(): Tool = currentTool
 
-    /** 사이즈 레이블(TextView)의 텍스트를 숫자 (selectedSize) 로 갱신 */
+    /** 사이즈 갱신 */
     private fun updateSizeUI() {
-        // 변수명이 canvasPreviewSize이므로, 바로 텍스트를 덮어씁니다.
-        canvasPreviewSize.text = selectedSize.toInt().toString()
+        canvasPreviewSize.text = when (currentTool) {
+                Tool.PEN         -> penSize.toInt().toString()
+                Tool.HIGHLIGHTER -> highlighterSize.toInt().toString()
+                Tool.TEXT        -> textSize.toInt().toString()
+                Tool.ERASER      -> "-"  // 지우개는 크기 표시 없음
+            }
     }
 
     /** 색상 선택 뷰 배경을 선택된 색상으로 바꿉니다. */
     private fun updateColorUI() {
-        canvasPreviewColor.setBackgroundColor(selectedColor)
+        val c = when (currentTool) {
+                Tool.PEN         -> penColor
+                Tool.HIGHLIGHTER -> highlighterColor
+                Tool.TEXT        -> textColor
+                Tool.ERASER      -> Color.TRANSPARENT
+            }
+        canvasPreviewColor.setBackgroundColor(c)
     }
 
     /** 툴 버튼 UI(선택된 버튼 강조 등)를 업데이트합니다. */
