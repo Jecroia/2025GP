@@ -29,8 +29,8 @@ class CanvasToolController(
     private val btnEraser: ImageButton,
 
     // 크기/색상 조절 뷰 (ID가 레이아웃 상에 존재하는 것과 동일하게 맞춤)
-    private val btnIncreaseSize: Button,
-    private val btnDecreaseSize: Button,
+    private val btnIncreaseSize: ImageButton,
+    private val btnDecreaseSize: ImageButton,
     private val canvasPreviewColor: View,
     private val canvasPreviewSize: TextView,
 
@@ -215,8 +215,10 @@ class CanvasToolController(
         if (panelContainer.isVisible) hidePanel() else showPanel()
     }
 
-    /** 현재 선택된 도구 가져오기 */
+    /** 가져오기 */
     fun getCurrentTool(): Tool = currentTool
+    fun getTextColor(): Int = textColor
+    fun getTextSize(): Float = textSize
 
     /** 사이즈 갱신 */
     private fun updateSizeUI() {

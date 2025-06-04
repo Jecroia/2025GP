@@ -56,8 +56,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var canvasToolsPanel: View
     private lateinit var canvasPreviewSize: TextView
     private lateinit var canvasPreviewColor: View
-    private lateinit var btnDecreaseSize: Button
-    private lateinit var btnIncreaseSize: Button
+    private lateinit var btnDecreaseSize: ImageButton
+    private lateinit var btnIncreaseSize: ImageButton
     private lateinit var gestureDetector: GestureDetector
     private lateinit var toolController: CanvasToolController
     private lateinit var colorPicker: ColorPicker
@@ -175,37 +175,75 @@ class MainActivity : AppCompatActivity() {
         btnRedo.setOnClickListener { handleUndoOrRedo(isUndo = false) }
         btnSave.setOnClickListener { showSaveDialog() }
 
-        annotationCanvas.onTextTapListener = { x, y ->
+        annotationCanvas.onTextTapListener = { modelX, modelY ->
+            // 1) 혹시 전에 올라와 있던 EditText가 있으면 제거
             thumbnailContainer.findViewWithTag<EditText>("inlineEdit")?.let {
                 thumbnailContainer.removeView(it)
             }
+
+            // 2) “모델 좌표(modelX, modelY)” → “캔버스 내부 픽셀 좌표”로 변환
+            //    (mapModelToScreen 은 AnnotationCanvasView에 미리 구현되어 있어야 합니다)
+            val mappedPt = annotationCanvas.mapModelToScreen(modelX, modelY)
+            val mappedX = mappedPt[0]            // 캔버스 내부 좌표의 X
+            val mappedYBaseline = mappedPt[1]     // 캔버스 내부 좌표의 Y (베이스라인)
+
+            // 3) 캔버스 뷰의 화면 내 절대 위치 구하기
+            val canvasLoc = IntArray(2)
+            annotationCanvas.getLocationOnScreen(canvasLoc)
+            val absX = canvasLoc[0] + mappedX
+            val absYBaseline = canvasLoc[1] + mappedYBaseline
+
+            // 4) thumbnailContainer(부모 FrameLayout)의 절대 위치 구하기
+            val containerLoc = IntArray(2)
+            thumbnailContainer.getLocationOnScreen(containerLoc)
+            //    → 이제 "절대 좌표"를 "thumbnailContainer 내부 좌표"로 변환
+            val relX = (absX - containerLoc[0]).toInt()
+            val relYBaseline = (absYBaseline - containerLoc[1]).toInt()
+
+            // 5) 새로운 EditText 생성 (크기 관련 속성은 전혀 건드리지 않음)
             val edit = EditText(this).apply {
                 tag = "inlineEdit"
                 setBackgroundResource(android.R.drawable.edit_text)
                 setSingleLine(true)
                 imeOptions = EditorInfo.IME_ACTION_DONE
-                setTextColor(Color.BLACK)
+
+                // (a) 색상만 패널에서 가져와서 적용
+                setTextColor(toolController.getTextColor())
+
+                // (b) 텍스트 크기는 그냥 기본값(14sp~16sp) 그대로 두기
+                //     → 이 한 줄도 없앨 수 있습니다. (`textSize = ...` 자체를 쓰지 않음)
+
                 setOnEditorActionListener { v, actionId, _ ->
                     if (actionId == EditorInfo.IME_ACTION_DONE) {
-                        annotationCanvas.addText(v.text.toString(), x, y)
+                        // 입력이 끝났을 때, 모델 좌표로 addText 호출
+                        annotationCanvas.addText(v.text.toString(), modelX, modelY)
                         thumbnailContainer.removeView(v)
                         true
                     } else false
                 }
             }
+
+            // 6) EditText 내부 paint의 fontMetrics로부터 "베이스라인까지 거리" 계산
+            //    → 얘가 없으면, EditText를 터치한 바로 그 지점에 올리지 못합니다.
+            val fm = edit.paint.fontMetrics
+            val baselineOffset = -fm.ascent
+            //    (fm.ascent가 음수이므로, -ascent 하면 양수 픽셀 값이 나옵니다)
+
+            // 7) LayoutParams에 “절대 위치 → thumbnailContainer 내부 좌표”를 베이스라인 기준으로 세팅
             val params = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                leftMargin = x.toInt()
-                topMargin  = y.toInt()
+                leftMargin = relX
+                topMargin  = (relYBaseline - baselineOffset).toInt()
             }
             thumbnailContainer.addView(edit, params)
             edit.requestFocus()
-            val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+
+            // 8) 키보드 올리기
+            val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
             imm.showSoftInput(edit, InputMethodManager.SHOW_IMPLICIT)
         }
-
         openFilePicker()
     }
 

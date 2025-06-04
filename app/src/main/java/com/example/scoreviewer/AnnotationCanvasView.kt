@@ -39,6 +39,9 @@ class AnnotationCanvasView @JvmOverloads constructor(
 
     private var lastTouchX: Float = 0f
     private var lastTouchY: Float = 0f
+    private val matrixValues = FloatArray(9)
+    private val smoothPath = Path()
+    private val transformedSmoothPath = Path()
 
     /** 외부에서 color를 바꿀 때 호출 (CanvasToolController에서) */
     fun setCustomColor(color: Int) {
@@ -230,15 +233,15 @@ class AnnotationCanvasView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
+        val currentScale = getCurrentScale()
 
         pageToHistory[currentPage]?.forEach { stroke ->
             when (stroke) {
                 is Stroke.PathStroke -> {
-                    val rawPoints: List<PointF> = stroke.points
+                    val rawPoints = stroke.points
                     if (rawPoints.isNotEmpty()) {
-                        // 1) 매끄러운 Bézier 곡선을 담을 새 Path 생성
-                        val smoothPath = Path()
-
+                        // 1) 매끄러운 Bézier 곡선을 담을 Path 비우기
+                        smoothPath.reset()
                         if (rawPoints.size < 3) {
                             // 점이 2개 미만이면 그냥 직선으로 잇기
                             smoothPath.moveTo(rawPoints[0].x, rawPoints[0].y)
@@ -264,19 +267,32 @@ class AnnotationCanvasView @JvmOverloads constructor(
                         }
 
                         // 2) “Path.transform(...)” 을 호출해서 화면 좌표로 변환
-                        val transformedSmoothPath = Path()
+                        transformedSmoothPath.reset()
                         smoothPath.transform(imageTransformationMatrix, transformedSmoothPath)
 
                         // 3) 변환된 Path를 그대로 그리기
+                        val originalWidth = stroke.paint.strokeWidth
+                        stroke.paint.strokeWidth = originalWidth * currentScale
                         canvas.drawPath(transformedSmoothPath, stroke.paint)
+                        stroke.paint.strokeWidth = originalWidth
                     }
                 }
 
                 is Stroke.TextStroke -> {
-                    // (텍스트는 기존과 동일하게 mapPoints → drawText)
+                    // ① 모델 좌표(stroke.x, stroke.y)를 화면 좌표로 변환
                     val pt = floatArrayOf(stroke.x, stroke.y)
                     imageTransformationMatrix.mapPoints(pt)
+
+                    // ② paint.textSize에 현재 줌 배율을 곱한다 (화면상 크기를 맞추려면)
+                    val originalTextSize = stroke.paint.textSize
+                    val currentScale = getCurrentScale()
+                    stroke.paint.textSize = originalTextSize * currentScale
+
+                    // ③ 변환된 화면 좌표(pt[0], pt[1])에 맞춰 drawText
                     canvas.drawText(stroke.text, pt[0], pt[1], stroke.paint)
+
+                    // ④ 원래 textSize로 복원
+                    stroke.paint.textSize = originalTextSize
                 }
             }
         }
@@ -381,6 +397,17 @@ class AnnotationCanvasView @JvmOverloads constructor(
         imageTransformationMatrix.set(matrix)
         imageTransformationMatrix.invert(inverseImageTransformationMatrix)
         invalidate()
+    }
+
+    fun mapModelToScreen(modelX: Float, modelY: Float): FloatArray {
+        val pts = floatArrayOf(modelX, modelY)
+        imageTransformationMatrix.mapPoints(pts)
+        return pts
+    }
+
+    fun getCurrentScale(): Float {
+        imageTransformationMatrix.getValues(matrixValues)
+        return matrixValues[Matrix.MSCALE_X]
     }
 
     fun clearAll() {

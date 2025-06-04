@@ -75,13 +75,17 @@
             android:textSize="14sp"
             android:layout_marginEnd="4dp" />
 
-        <Button
+        <ImageButton
             android:id="@+id/btnDecreaseSize"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:text="-"
-            android:textSize="18sp" />
+            android:layout_marginEnd="8dp"
+            android:background="@drawable/tool_button_background"
+            android:src="@drawable/ic_remove_24"
+            android:contentDescription="크기 감소"
+            android:scaleType="centerInside"/>
 
+        <!-- 현재 크기를 표시 -->
         <TextView
             android:id="@+id/canvasPreviewSize"
             android:layout_width ="wrap_content"
@@ -90,12 +94,16 @@
             android:textSize="14sp"
             android:paddingHorizontal="8dp" />
 
-        <Button
+        <!-- 크기 증가 -->
+        <ImageButton
             android:id="@+id/btnIncreaseSize"
             android:layout_width="48dp"
             android:layout_height="48dp"
-            android:text="+"
-            android:textSize="18sp" />
+            android:layout_marginStart="8dp"
+            android:background="@drawable/tool_button_background"
+            android:src="@drawable/ic_add_24"
+            android:contentDescription="크기 증가"
+            android:scaleType="centerInside"/>
     </LinearLayout>
 
     <!-- 3) 색상 선택 영역 -->
