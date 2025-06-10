@@ -51,6 +51,8 @@ class PlayActivity : AppCompatActivity() {
     private var midiPath: String? = null
     private var musicXmlPath: String? = null
     private var pageChangeTimes: List<Int> = emptyList()
+    private var currentLines: List<MusicXmlParser.Line> = emptyList()
+    private var currentLineIndex = -1
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -117,6 +119,7 @@ class PlayActivity : AppCompatActivity() {
             context = this,
             onTimeUpdate = { currentMillis, totalMillis ->
                 updateTimeDisplay(currentMillis, totalMillis)
+                updateCurrentLine(currentMillis)
                 if (pageChangeTimes.isNotEmpty()) {
                     val nextPage = pageChangeTimes.indexOfLast { it <= currentMillis }
                     if (nextPage != -1 && nextPage != viewPager.currentItem) {
@@ -167,7 +170,7 @@ class PlayActivity : AppCompatActivity() {
         val savedState = playbackState.loadState()
         pdfPath = intent.getStringExtra("pdfPath") ?: savedState.pdfPath
         midiPath = intent.getStringExtra("midiPath") ?: savedState.midiPath
-        musicXmlPath = intent.getStringExtra("musicXmlPath")
+        musicXmlPath = intent.getStringExtra("musicXmlPath") ?: savedState.musicXmlPath
         if (pdfPath != null) {
             loadPdfFile()
         }
@@ -176,7 +179,10 @@ class PlayActivity : AppCompatActivity() {
         }
         if (musicXmlPath != null) {
             val xmlFile = File(musicXmlPath!!)
-            pageChangeTimes = MusicXmlParser.parsePageChangeTimes(xmlFile)
+            if (xmlFile.exists()) {
+                pageChangeTimes = MusicXmlParser.parsePageChangeTimes(xmlFile)
+                currentLines = MusicXmlParser.parseLines(xmlFile)
+            }
         }
         if (playbackState.shouldRestoreState()) {
             showRestoreDialog()
@@ -373,6 +379,7 @@ class PlayActivity : AppCompatActivity() {
             }
             musicXmlPath = tempXml.absolutePath
             pageChangeTimes = MusicXmlParser.parsePageChangeTimes(tempXml)
+            currentLines = MusicXmlParser.parseLines(tempXml)
             Toast.makeText(this, "MusicXML 파일이 성공적으로 로드되었습니다.", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
             Toast.makeText(this, "MusicXML 파일 처리 중 오류: ${e.message}", Toast.LENGTH_LONG).show()
@@ -396,7 +403,8 @@ class PlayActivity : AppCompatActivity() {
             page = viewPager.currentItem,
             millis = midiPlaybackManager.getCurrentTime(),
             pdfPath = pdfPath,
-            midiPath = midiPath
+            midiPath = midiPath,
+            musicXmlPath = musicXmlPath
         )
     }
 
@@ -493,6 +501,27 @@ class PlayActivity : AppCompatActivity() {
                 }
             } else {
                 Toast.makeText(this, "파일 접근 권한이 필요합니다.", Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun updateCurrentLine(currentMillis: Int) {
+        if (currentLines.isEmpty()) return
+
+        val newLineIndex = currentLines.indexOfLast { it.startTimeMs <= currentMillis }
+        if (newLineIndex != currentLineIndex) {
+            currentLineIndex = newLineIndex
+            if (currentLineIndex >= 0) {
+                val currentLine = currentLines[currentLineIndex]
+                // 현재 줄 하이라이트 처리
+                (viewPager.adapter as? PDFPagerAdapter)?.highlightLine(currentLine.pageNumber, currentLine.lineNumber)
+                
+                // 현재 연주 중인 마디 번호 표시
+                val currentMeasures = currentLine.measureNumbers
+                if (currentMeasures.isNotEmpty()) {
+                    val measureText = "마디: ${currentMeasures.first()}-${currentMeasures.last()}"
+                    timeText.text = "${timeText.text} ($measureText)"
+                }
             }
         }
     }

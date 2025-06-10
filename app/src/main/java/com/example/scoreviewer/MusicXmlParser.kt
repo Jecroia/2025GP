@@ -24,7 +24,16 @@ object MusicXmlParser {
         val repeatEnd: Boolean = false,
         var repeatCount: Int = 1,
         val jumpTo: Int? = null,  // D.C., D.S. 등의 경우 이동할 마디 번호
-        val jumpType: String? = null  // "D.C.", "D.S.", "Fine" 등
+        val jumpType: String? = null,  // "D.C.", "D.S.", "Fine" 등
+        val pageNumber: Int
+    )
+
+    data class Line(
+        val startTimeMs: Int,
+        val endTimeMs: Int,
+        val pageNumber: Int,
+        val lineNumber: Int,
+        val measureNumbers: List<Int>  // 이 줄에 포함된 마디 번호들
     )
 
     /**
@@ -32,83 +41,65 @@ object MusicXmlParser {
      * @param measuresPerPage 한 페이지에 들어갈 마디 수(기본값 4)
      * @return 각 페이지별 전환 타임스탬프(ms) 리스트
      */
-    fun parsePageChangeTimes(
-        xmlFile: File,
-        measuresPerPage: Int = 4
-    ): List<Int> {
+    fun parsePageChangeTimes(xmlFile: File): List<Int> {
         val measures = parseMeasures(xmlFile)
         if (measures.isEmpty()) {
             Log.e(TAG, "No measures found in MusicXML file")
             return emptyList()
         }
 
-        Log.d(TAG, "Parsed ${measures.size} measures")
-        measures.forEachIndexed { index, measure ->
-            Log.d(TAG, "Measure $index: tempo=${measure.tempo}, beats=${measure.beats}/${measure.beatType}, " +
-                    "divisions=${measure.divisions}, duration=${measure.duration}, " +
-                    "repeatStart=${measure.repeatStart}, repeatEnd=${measure.repeatEnd}, " +
-                    "repeatCount=${measure.repeatCount}, jumpTo=${measure.jumpTo}, " +
-                    "jumpType=${measure.jumpType}")
+        // 각 마디의 지속 시간 계산
+        val measureTimings = measures.map { measure ->
+            val duration = if (measure.duration > 0) {
+                ((measure.duration.toDouble() * 60_000) / (measure.divisions * measure.tempo)).roundToInt()
+            } else {
+                (measure.beats * 60_000 / measure.tempo).roundToInt()
+            }
+            Log.d(TAG, "Measure ${measure.number}: duration=$duration ms (tempo=${measure.tempo}, " +
+                    "divisions=${measure.divisions}, duration=${measure.duration}, beats=${measure.beats})")
+            duration
         }
 
-        val times = mutableListOf<Int>()
-        var currentTimeMs = 0
-        var currentDivisions = 1
-        var currentTempo = 120f
-        var currentMeasureIndex = 0
-        val processedMeasures = mutableSetOf<Int>()
-        val repeatCounts = mutableMapOf<Int, Int>()  // 마디별 남은 반복 횟수 추적
+        // 페이지별 시작 마디 번호 수집
+        val pageMeasureStartNumbers = mutableListOf(0)  // 첫 페이지는 0번 마디부터 시작
+        var currentPage = measures[0].pageNumber
+        measures.forEachIndexed { index, measure ->
+            if (measure.pageNumber != currentPage) {
+                pageMeasureStartNumbers.add(index)
+                currentPage = measure.pageNumber
+                Log.d(TAG, "Page change detected at measure ${measure.number} (index=$index)")
+            }
+        }
 
-        // 반복 구조를 포함한 실제 연주 순서대로 마디 처리
+        // 반복 구간 처리
+        val processedMeasures = mutableSetOf<Int>()
+        val repeatCounts = mutableMapOf<Int, Int>()
+        var currentMeasureIndex = 0
+        var totalTimeMs = 0
+        val pageChangeTimings = mutableListOf<Int>()
+
         while (currentMeasureIndex < measures.size) {
             if (processedMeasures.contains(currentMeasureIndex)) {
-                // 이미 처리된 마디는 건너뛰기
                 currentMeasureIndex++
                 continue
             }
 
             val measure = measures[currentMeasureIndex]
             processedMeasures.add(currentMeasureIndex)
+            totalTimeMs += measureTimings[currentMeasureIndex]
 
-            // divisions 값이 변경되면 업데이트
-            if (measure.divisions > 0) {
-                currentDivisions = measure.divisions
-            }
-            
-            // 템포가 변경되면 업데이트
-            if (measure.tempo > 0) {
-                currentTempo = measure.tempo
-            }
-
-            // 마디의 실제 지속 시간 계산
-            val beatDurationMs = (60_000 / currentTempo).roundToInt()
-            val measureDurationMs = if (measure.duration > 0) {
-                (measure.duration * beatDurationMs) / (currentDivisions * measure.beatType)
-            } else {
-                measure.beats * beatDurationMs
-            }
-
-            Log.d(TAG, "Processing measure ${currentMeasureIndex + 1}: duration=$measureDurationMs ms " +
-                    "(tempo=$currentTempo, divisions=$currentDivisions, " +
-                    "beats=${measure.beats}/${measure.beatType})")
-
-            currentTimeMs += measureDurationMs
-
-            // 페이지 전환이 필요한 시점에 타임스탬프 추가
-            if ((processedMeasures.size % measuresPerPage == 0) || 
-                (currentMeasureIndex == measures.size - 1 && !measure.repeatEnd)) {
-                times.add(currentTimeMs)
-                Log.d(TAG, "Page transition at measure ${currentMeasureIndex + 1}: ${currentTimeMs}ms")
+            // 페이지 전환 시점 체크
+            if (pageMeasureStartNumbers.contains(currentMeasureIndex + 1)) {
+                pageChangeTimings.add(totalTimeMs)
+                Log.d(TAG, "Page transition timing: $totalTimeMs ms at measure ${measure.number}")
             }
 
             // 반복 처리
             when {
-                // D.C. 또는 D.S. 처리
                 measure.jumpTo != null -> {
                     Log.d(TAG, "Jump to measure ${measure.jumpTo} (${measure.jumpType})")
                     currentMeasureIndex = measure.jumpTo - 1
                 }
-                // 일반 반복 처리
                 measure.repeatEnd -> {
                     val repeatStartIndex = findRepeatStart(measures, currentMeasureIndex)
                     if (repeatStartIndex >= 0) {
@@ -130,19 +121,8 @@ object MusicXmlParser {
             }
         }
 
-        return times
-    }
-
-    /**
-     * 반복 시작 마디 찾기
-     */
-    private fun findRepeatStart(measures: List<Measure>, currentIndex: Int): Int {
-        for (i in currentIndex downTo 0) {
-            if (measures[i].repeatStart) {
-                return i
-            }
-        }
-        return -1
+        Log.d(TAG, "Final page change timings: $pageChangeTimings")
+        return pageChangeTimings
     }
 
     /**
@@ -161,6 +141,7 @@ object MusicXmlParser {
         var currentRepeatCount = 1
         var currentJumpTo: Int? = null
         var currentJumpType: String? = null
+        var currentPageNumber = 0
 
         try {
             val factory = XmlPullParserFactory.newInstance()
@@ -177,6 +158,11 @@ object MusicXmlParser {
                             when (parser.name) {
                                 "measure" -> {
                                     measureNumber++
+                                    // 페이지 번호 파싱
+                                    val pageAttr = parser.getAttributeValue(null, "page")
+                                    if (pageAttr != null) {
+                                        currentPageNumber = pageAttr.toIntOrNull() ?: currentPageNumber
+                                    }
                                     measures.add(Measure(
                                         measureNumber,
                                         currentBeats,
@@ -188,7 +174,8 @@ object MusicXmlParser {
                                         currentRepeatEnd,
                                         currentRepeatCount,
                                         currentJumpTo,
-                                        currentJumpType
+                                        currentJumpType,
+                                        currentPageNumber
                                     ))
                                     // 마디 시작 시 상태 초기화
                                     currentDuration = 0
@@ -202,7 +189,7 @@ object MusicXmlParser {
                                     val tempoAttr = parser.getAttributeValue(null, "tempo")
                                     if (tempoAttr != null) {
                                         currentTempo = tempoAttr.toFloatOrNull() ?: currentTempo
-                                        Log.d(TAG, "Found tempo change: $currentTempo")
+                                        Log.d(TAG, "Found tempo change: $currentTempo BPM")
                                     }
                                 }
                                 "time" -> {
@@ -229,6 +216,7 @@ object MusicXmlParser {
                                 }
                                 "duration" -> {
                                     currentDuration = parser.nextText().toIntOrNull() ?: currentDuration
+                                    Log.d(TAG, "Found duration: $currentDuration divisions")
                                 }
                                 "repeat" -> {
                                     val direction = parser.getAttributeValue(null, "direction")
@@ -283,6 +271,162 @@ object MusicXmlParser {
             e.printStackTrace()
         }
 
+        Log.d(TAG, "Parsed ${measures.size} measures")
         return measures
+    }
+
+    /**
+     * MusicXML 파일에서 각 줄의 시작과 끝 시간을 파싱
+     */
+    fun parseLines(xmlFile: File): List<Line> {
+        val measures = parseMeasures(xmlFile)
+        if (measures.isEmpty()) {
+            Log.e(TAG, "No measures found in MusicXML file")
+            return emptyList()
+        }
+
+        val lines = mutableListOf<Line>()
+        var currentTimeMs = 0
+        var currentPage = 0
+        var currentLine = 0
+        var currentDivisions = 1
+        var currentTempo = 120f
+        var currentMeasureIndex = 0
+        val processedMeasures = mutableSetOf<Int>()
+        val repeatCounts = mutableMapOf<Int, Int>()
+        var currentLineMeasures = mutableListOf<Int>()
+        var lineStartTime = 0
+
+        // 페이지별 마디 수 계산
+        val measuresPerPage = mutableMapOf<Int, Int>()
+        var currentPageMeasures = 0
+        var currentPageNumber = 0
+
+        // 먼저 페이지별 마디 수를 계산
+        measures.forEach { measure ->
+            if (measure.pageNumber != currentPageNumber) {
+                measuresPerPage[currentPageNumber] = currentPageMeasures
+                currentPageNumber = measure.pageNumber
+                currentPageMeasures = 0
+            }
+            currentPageMeasures++
+        }
+        measuresPerPage[currentPageNumber] = currentPageMeasures
+
+        // 각 페이지의 마디를 줄로 나누기
+        currentPageNumber = 0
+        currentPageMeasures = 0
+        var measuresInCurrentLine = 0
+
+        while (currentMeasureIndex < measures.size) {
+            val measure = measures[currentMeasureIndex]
+            if (measure.number in processedMeasures) {
+                currentMeasureIndex++
+                continue
+            }
+
+            processedMeasures.add(measure.number)
+            currentDivisions = measure.divisions
+            currentTempo = measure.tempo
+
+            // 마디의 지속 시간을 밀리초로 변환
+            val measureDurationMs = if (measure.duration > 0) {
+                ((measure.duration.toDouble() * 60_000) / (currentDivisions * currentTempo)).roundToInt()
+            } else {
+                (measure.beats * 60_000 / currentTempo).roundToInt()
+            }
+            
+            Log.d(TAG, "Measure ${measure.number}: tempo=$currentTempo BPM, divisions=$currentDivisions, " +
+                    "duration=$measureDurationMs ms (duration=${measure.duration}, beats=${measure.beats})")
+            
+            currentLineMeasures.add(measure.number)
+            measuresInCurrentLine++
+            currentPageMeasures++
+
+            // 페이지가 바뀌면 새로운 줄 시작
+            if (measure.pageNumber != currentPageNumber) {
+                if (currentLineMeasures.isNotEmpty()) {
+                    lines.add(Line(
+                        startTimeMs = lineStartTime,
+                        endTimeMs = currentTimeMs,
+                        pageNumber = currentPageNumber,
+                        lineNumber = currentLine,
+                        measureNumbers = currentLineMeasures.toList()
+                    ))
+                }
+                currentPageNumber = measure.pageNumber
+                currentLine = 0
+                currentLineMeasures.clear()
+                measuresInCurrentLine = 0
+                lineStartTime = currentTimeMs
+            }
+            // 현재 페이지의 마디 수에 따라 줄 나누기
+            else if (measuresInCurrentLine >= 4) {  // 한 줄에 4마디씩
+                lines.add(Line(
+                    startTimeMs = lineStartTime,
+                    endTimeMs = currentTimeMs + measureDurationMs,
+                    pageNumber = currentPageNumber,
+                    lineNumber = currentLine,
+                    measureNumbers = currentLineMeasures.toList()
+                ))
+
+                currentTimeMs += measureDurationMs
+                lineStartTime = currentTimeMs
+                currentLine++
+                measuresInCurrentLine = 0
+                currentLineMeasures.clear()
+            } else {
+                currentTimeMs += measureDurationMs
+            }
+
+            when {
+                measure.jumpTo != null -> {
+                    currentMeasureIndex = measure.jumpTo - 1
+                }
+                measure.repeatEnd -> {
+                    val repeatStartIndex = findRepeatStart(measures, currentMeasureIndex)
+                    if (repeatStartIndex >= 0) {
+                        val remainingCount = repeatCounts.getOrPut(repeatStartIndex) { measure.repeatCount } - 1
+                        if (remainingCount > 0) {
+                            repeatCounts[repeatStartIndex] = remainingCount
+                            currentMeasureIndex = repeatStartIndex
+                        } else {
+                            repeatCounts.remove(repeatStartIndex)
+                            currentMeasureIndex++
+                        }
+                    } else {
+                        currentMeasureIndex++
+                    }
+                }
+                else -> currentMeasureIndex++
+            }
+        }
+
+        // 마지막 줄 처리
+        if (currentLineMeasures.isNotEmpty()) {
+            lines.add(Line(
+                startTimeMs = lineStartTime,
+                endTimeMs = currentTimeMs,
+                pageNumber = currentPageNumber,
+                lineNumber = currentLine,
+                measureNumbers = currentLineMeasures.toList()
+            ))
+        }
+
+        Log.d(TAG, "Parsed ${lines.size} lines with total duration ${currentTimeMs}ms")
+        Log.d(TAG, "Measures per page: $measuresPerPage")
+        return lines
+    }
+
+    /**
+     * 반복 시작 마디 찾기
+     */
+    private fun findRepeatStart(measures: List<Measure>, currentIndex: Int): Int {
+        for (i in currentIndex downTo 0) {
+            if (measures[i].repeatStart) {
+                return i
+            }
+        }
+        return -1
     }
 } 

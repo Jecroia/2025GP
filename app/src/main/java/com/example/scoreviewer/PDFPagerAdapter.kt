@@ -1,6 +1,9 @@
 package com.example.scoreviewer
 
 import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.recyclerview.widget.RecyclerView
@@ -16,7 +19,17 @@ class PDFPagerAdapter(
     private val viewPager: ViewPager2
 ) : RecyclerView.Adapter<PDFPagerAdapter.PageViewHolder>() {
 
-    class PageViewHolder(val imageView: ImageView) : RecyclerView.ViewHolder(imageView)
+    class PageViewHolder(val imageView: ImageView) : RecyclerView.ViewHolder(imageView) {
+        var originalBitmap: Bitmap? = null
+        var highlightedBitmap: Bitmap? = null
+        var currentLine = -1
+    }
+
+    private val linePaint = Paint().apply {
+        color = Color.YELLOW
+        alpha = 100
+        style = Paint.Style.FILL
+    }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PageViewHolder {
         val imageView = ImageView(parent.context).apply {
@@ -42,6 +55,8 @@ class PDFPagerAdapter(
         )
         bitmap.setPixels(pixmap.pixels, 0, pixmap.width, 0, 0, pixmap.width, pixmap.height)
 
+        holder.originalBitmap = bitmap
+        holder.highlightedBitmap = bitmap.copy(bitmap.config ?: Bitmap.Config.ARGB_8888, true)
         holder.imageView.setImageBitmap(bitmap)
         page.destroy()
         pixmap.destroy()
@@ -66,4 +81,27 @@ class PDFPagerAdapter(
     }
 
     override fun getItemCount(): Int = pageCount
+
+    fun highlightLine(pageNumber: Int, lineNumber: Int) {
+        val rv = viewPager.getChildAt(0) as? RecyclerView
+        val holder = rv?.findViewHolderForAdapterPosition(pageNumber) as? PageViewHolder
+        holder?.let {
+            if (it.currentLine != lineNumber) {
+                it.currentLine = lineNumber
+                it.originalBitmap?.let { original ->
+                    val highlighted = original.copy(original.config ?: Bitmap.Config.ARGB_8888, true)
+                    val canvas = Canvas(highlighted)
+                    
+                    // 페이지를 4개의 줄로 나누어 하이라이트
+                    val lineHeight = original.height / 4
+                    val y = lineNumber * lineHeight
+                    
+                    canvas.drawRect(0f, y.toFloat(), original.width.toFloat(), (y + lineHeight).toFloat(), linePaint)
+                    
+                    it.highlightedBitmap = highlighted
+                    it.imageView.setImageBitmap(highlighted)
+                }
+            }
+        }
+    }
 }

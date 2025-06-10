@@ -10,6 +10,7 @@ class PlaybackState(context: Context) {
         private const val KEY_MILLIS = "last_millis"
         private const val KEY_PDF_PATH = "last_pdf"
         private const val KEY_MIDI_PATH = "last_midi"
+        private const val KEY_MUSICXML_PATH = "last_musicxml"
     }
 
     private val prefs: SharedPreferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
@@ -18,15 +19,17 @@ class PlaybackState(context: Context) {
         val page: Int,
         val millis: Int,
         val pdfPath: String?,
-        val midiPath: String?
+        val midiPath: String?,
+        val musicXmlPath: String?
     )
 
-    fun saveState(page: Int, millis: Int, pdfPath: String?, midiPath: String?) {
+    fun saveState(page: Int, millis: Int, pdfPath: String?, midiPath: String?, musicXmlPath: String?) {
         prefs.edit().apply {
             putInt(KEY_PAGE, page)
             putInt(KEY_MILLIS, millis)
             putString(KEY_PDF_PATH, pdfPath)
             putString(KEY_MIDI_PATH, midiPath)
+            putString(KEY_MUSICXML_PATH, musicXmlPath)
             apply()
         }
     }
@@ -36,7 +39,8 @@ class PlaybackState(context: Context) {
             page = prefs.getInt(KEY_PAGE, -1),
             millis = prefs.getInt(KEY_MILLIS, -1),
             pdfPath = prefs.getString(KEY_PDF_PATH, null),
-            midiPath = prefs.getString(KEY_MIDI_PATH, null)
+            midiPath = prefs.getString(KEY_MIDI_PATH, null),
+            musicXmlPath = prefs.getString(KEY_MUSICXML_PATH, null)
         )
     }
 
