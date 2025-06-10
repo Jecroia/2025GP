@@ -1,10 +1,13 @@
 package com.example.scoreviewer
 
+import android.Manifest
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.database.Cursor
 import android.graphics.Color
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.provider.OpenableColumns
 import android.util.Log
@@ -18,6 +21,8 @@ import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
 import androidx.viewpager2.widget.ViewPager2
 import java.io.File
@@ -26,6 +31,8 @@ import kotlin.math.abs
 
 class PlayActivity : AppCompatActivity() {
     private val PICK_MIDI_FILE = 2001
+    private val PICK_MUSICXML_FILE = 3001
+    private val PERMISSION_REQUEST_CODE = 1001
 
     private lateinit var viewPager: ViewPager2
     private lateinit var pdfManager: PdfManager
@@ -42,35 +49,51 @@ class PlayActivity : AppCompatActivity() {
     private var pageCount = 0
     private var pdfPath: String? = null
     private var midiPath: String? = null
+    private var musicXmlPath: String? = null
+    private var pageChangeTimes: List<Int> = emptyList()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_play)
-
+        
+        // 권한 체크 및 요청
+        checkAndRequestPermissions()
+        
         pdfPath = intent.getStringExtra("pdfPath")
+        midiPath = intent.getStringExtra("midiPath")
+        musicXmlPath = intent.getStringExtra("musicXmlPath")
+        val autoMatchFailed = intent.getBooleanExtra("autoMatchFailed", false)
         initializeViews()
-
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val resetPrefs = intent.getBooleanExtra("resetPrefs", false)
-
         if (resetPrefs && pdfPath != null) {
             clearPdfSpecificSettings(prefs, pdfPath!!)
         } else if (pdfPath != null) {
             loadPdfSpecificSettings(prefs, pdfPath!!)
         }
-
         findViewById<Button>(R.id.btnApplySync).setOnClickListener {
             applyPdfSpecificSettings(prefs, pdfPath)
         }
-
         setupToolbar()
         setupPlaybackManager()
         setupSyncPanel()
         setupPlaybackState()
-        loadSavedFiles()
+        if (pdfPath != null) loadPdfFile()
+        if (midiPath != null) loadMidiFile()
+        if (musicXmlPath != null) {
+            val xmlFile = File(musicXmlPath!!)
+            pageChangeTimes = MusicXmlParser.parsePageChangeTimes(xmlFile)
+        }
         setupControlButtons()
         setupSeekBar()
-        checkForMidiFile()
+        if (autoMatchFailed) {
+            Toast.makeText(this, "자동으로 MIDI/MusicXML 파일을 찾지 못했습니다. 직접 선택해 주세요.", Toast.LENGTH_LONG).show()
+            openMidiFilePicker()
+            openMusicXmlFilePicker()
+        }
+        findViewById<ImageButton>(R.id.btnSelectMusicXml)?.setOnClickListener {
+            openMusicXmlFilePicker()
+        }
     }
 
     private fun initializeViews() {
@@ -94,9 +117,17 @@ class PlayActivity : AppCompatActivity() {
             context = this,
             onTimeUpdate = { currentMillis, totalMillis ->
                 updateTimeDisplay(currentMillis, totalMillis)
+                if (pageChangeTimes.isNotEmpty()) {
+                    val nextPage = pageChangeTimes.indexOfLast { it <= currentMillis }
+                    if (nextPage != -1 && nextPage != viewPager.currentItem) {
+                        viewPager.setCurrentItem(nextPage, true)
+                    }
+                }
             },
             onPageTransition = { pageNumber ->
-                viewPager.setCurrentItem(pageNumber, true)
+                if (pageChangeTimes.isEmpty()) {
+                    viewPager.setCurrentItem(pageNumber, true)
+                }
             },
             onError = { errorMessage ->
                 runOnUiThread {
@@ -136,15 +167,17 @@ class PlayActivity : AppCompatActivity() {
         val savedState = playbackState.loadState()
         pdfPath = intent.getStringExtra("pdfPath") ?: savedState.pdfPath
         midiPath = intent.getStringExtra("midiPath") ?: savedState.midiPath
-
+        musicXmlPath = intent.getStringExtra("musicXmlPath")
         if (pdfPath != null) {
             loadPdfFile()
         }
-
         if (midiPath != null) {
             loadMidiFile()
         }
-
+        if (musicXmlPath != null) {
+            val xmlFile = File(musicXmlPath!!)
+            pageChangeTimes = MusicXmlParser.parsePageChangeTimes(xmlFile)
+        }
         if (playbackState.shouldRestoreState()) {
             showRestoreDialog()
         }
@@ -276,12 +309,24 @@ class PlayActivity : AppCompatActivity() {
         startActivityForResult(intent, PICK_MIDI_FILE)
     }
 
+    private fun openMusicXmlFilePicker() {
+        val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "text/xml"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/xml", "text/xml"))
+        }
+        startActivityForResult(intent, PICK_MUSICXML_FILE)
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-
         if (requestCode == PICK_MIDI_FILE && resultCode == RESULT_OK) {
             data?.data?.let { uri ->
                 handleMidiFileSelection(uri)
+            }
+        } else if (requestCode == PICK_MUSICXML_FILE && resultCode == RESULT_OK) {
+            data?.data?.let { uri ->
+                handleMusicXmlFileSelection(uri)
             }
         }
     }
@@ -315,6 +360,22 @@ class PlayActivity : AppCompatActivity() {
             Toast.makeText(this, "파일 처리 중 오류가 발생했습니다: ${e.message}", Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
             Toast.makeText(this, "MIDI 파일을 불러오는 중 오류가 발생했습니다: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun handleMusicXmlFileSelection(uri: Uri) {
+        try {
+            val inputStream = contentResolver.openInputStream(uri)
+                ?: throw IOException("파일을 열 수 없습니다")
+            val tempXml = File.createTempFile("selected_musicxml", ".xml", cacheDir)
+            tempXml.outputStream().use { output ->
+                inputStream.copyTo(output)
+            }
+            musicXmlPath = tempXml.absolutePath
+            pageChangeTimes = MusicXmlParser.parsePageChangeTimes(tempXml)
+            Toast.makeText(this, "MusicXML 파일이 성공적으로 로드되었습니다.", Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "MusicXML 파일 처리 중 오류: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -391,6 +452,49 @@ class PlayActivity : AppCompatActivity() {
         }
 
         Toast.makeText(this, "싱크 오프셋 및 시작 지연 설정이 적용되었습니다.", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun checkAndRequestPermissions() {
+        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(
+                Manifest.permission.READ_MEDIA_AUDIO,
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VIDEO
+            )
+        } else {
+            arrayOf(
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE
+            )
+        }
+
+        val permissionsToRequest = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }.toTypedArray()
+
+        if (permissionsToRequest.isNotEmpty()) {
+            ActivityCompat.requestPermissions(this, permissionsToRequest, PERMISSION_REQUEST_CODE)
+        }
+    }
+
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == PERMISSION_REQUEST_CODE) {
+            if (grantResults.all { it == PackageManager.PERMISSION_GRANTED }) {
+                // 권한이 승인되면 파일 로드 재시도
+                if (midiPath != null) loadMidiFile()
+                if (musicXmlPath != null) {
+                    val xmlFile = File(musicXmlPath!!)
+                    pageChangeTimes = MusicXmlParser.parsePageChangeTimes(xmlFile)
+                }
+            } else {
+                Toast.makeText(this, "파일 접근 권한이 필요합니다.", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 }
 

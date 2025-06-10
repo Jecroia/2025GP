@@ -24,6 +24,7 @@ import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import java.io.File
+import android.os.Environment
 
 class MainActivity : AppCompatActivity() {
 
@@ -51,6 +52,7 @@ class MainActivity : AppCompatActivity() {
     private var isSeekBarActive = true
     private var currentPdfFile: File? = null
     private var currentMidiFile: File? = null
+    private var currentMusicXmlFile: File? = null
 
     private val PICK_PDF_FILE = 1001
 
@@ -116,8 +118,10 @@ class MainActivity : AppCompatActivity() {
             currentPdfFile?.let {
                 val intent = Intent(this, PlayActivity::class.java).apply {
                     putExtra("pdfPath", it.absolutePath)
-                    // 최초 실행 여부를 미리 읽어둔 값으로 전달
+                    putExtra("midiPath", currentMidiFile?.absolutePath)
+                    putExtra("musicXmlPath", currentMusicXmlFile?.absolutePath)
                     putExtra("resetPrefs", isFirstRun)
+                    putExtra("autoMatchFailed", (currentMidiFile == null && currentMusicXmlFile == null))
                 }
                 startActivity(intent)
             }
@@ -261,15 +265,23 @@ class MainActivity : AppCompatActivity() {
                 ?.substringBeforeLast('.')
                 ?: pdfFile.nameWithoutExtension
         }
-        //동일 이름 MIDI 파일 존재 시 자동 연결
-        currentMidiFile = null //초기화
-        val midiFile = File(pdfFile.parentFile, pdfFile.nameWithoutExtension + ".mid")
-        if (midiFile.exists()) {
-            currentMidiFile = midiFile
-        }else {
-            prefs.edit().remove("last_midi").apply()
+        // 자동매칭: 원본 파일명 기반으로 외부 저장소에서 MIDI/MusicXML 검색
+        currentMidiFile = null
+        currentMusicXmlFile = null
+        val midiName = originalPdfBaseName + ".mid"
+        val musicXmlName = originalPdfBaseName + ".xml"
+        // 1. PDF와 같은 폴더(가능하다면)에서 먼저 검색
+        val midiFromCache = File(pdfFile.parentFile, midiName)
+        val xmlFromCache = File(pdfFile.parentFile, musicXmlName)
+        if (midiFromCache.exists()) currentMidiFile = midiFromCache
+        if (xmlFromCache.exists()) currentMusicXmlFile = xmlFromCache
+        // 2. 그래도 없으면 Downloads, Documents 등에서 검색
+        if (currentMidiFile == null) {
+            currentMidiFile = findFileInCommonDirs(midiName)
         }
-
+        if (currentMusicXmlFile == null) {
+            currentMusicXmlFile = findFileInCommonDirs(musicXmlName)
+        }
 
     }
 
@@ -394,6 +406,28 @@ class MainActivity : AppCompatActivity() {
             if (isUndo) annotationCanvas.undoLast()
             else        annotationCanvas.redoLast()
         }
+    }
+
+    private fun findFileInCommonDirs(fileName: String): File? {
+        val dirs = listOfNotNull(
+            getExternalFilesDir(null),
+            getExternalFilesDir(""),
+            getExternalFilesDir("Documents"),
+            getExternalFilesDir("Download"),
+            getExternalFilesDir("Music"),
+            getExternalFilesDir("Movies"),
+            getExternalFilesDir("Pictures"),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+        )
+        for (dir in dirs) {
+            val file = File(dir, fileName)
+            if (file.exists()) return file
+        }
+        return null
     }
 
 }
