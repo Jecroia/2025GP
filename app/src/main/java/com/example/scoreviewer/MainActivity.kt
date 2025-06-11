@@ -15,6 +15,7 @@ import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.RadioButton
+import android.widget.RadioGroup
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
@@ -345,12 +346,11 @@ class MainActivity : AppCompatActivity() {
         viewPager.registerOnPageChangeCallback(pageChangeCallback)
         annotationCanvas.setPage(viewPager.currentItem)
 
-        if (!::originalPdfBaseName.isInitialized) {
-            val display = currentPdfUri?.let { queryFileName(it) }
-            originalPdfBaseName = display
-                ?.substringBeforeLast('.')
-                ?: pdfFile.nameWithoutExtension
-        }
+        // 항상 열 때마다 원본 베이스네임 갱신
+        val display = currentPdfUri?.let { queryFileName(it) }
+        originalPdfBaseName = display
+            ?.substringBeforeLast('.')
+            ?: pdfFile.nameWithoutExtension
 
         currentMidiFile = null
         val midiFile = File(pdfFile.parentFile, pdfFile.nameWithoutExtension + ".mid")
@@ -414,56 +414,52 @@ class MainActivity : AppCompatActivity() {
 
     /** 저장 다이얼로그 표시 */
     private fun showSaveDialog() {
-        // 다이얼로그 뷰 inflate
+        val file = currentPdfFile
+        if (file == null) { /* null 처리 */ }
+
         val dialogView = layoutInflater.inflate(R.layout.dialog_save_options, null)
         val labelTitle    = dialogView.findViewById<TextView>(R.id.labelTitle)
-        val editTitle = dialogView.findViewById<EditText>(R.id.editTitle)
-        val textPathView = dialogView.findViewById<TextView>(R.id.textPath)
-        val radioFlatten = dialogView.findViewById<RadioButton>(R.id.radio_flattenPdf)
-        val radioSeparate = dialogView.findViewById<RadioButton>(R.id.radio_separate)
+        val editTitle     = dialogView.findViewById<EditText>(R.id.editTitle)
+        val textPathView  = dialogView.findViewById<TextView>(R.id.textPath)
+        val radioGroup    = dialogView.findViewById<RadioGroup>(R.id.radioGroupSaveType)
+        val radioFlatten  = dialogView.findViewById<RadioButton>(R.id.radio_flattenPdf)
 
-        // ① 라벨만 변경
-        radioFlatten.text  = "파일 저장"
-        radioSeparate.text = "다른 이름으로 파일 저장"
+        // 저장 경로...
+        textPathView.text = "저장 경로: ..."
 
-        // ② 기본 상태: “파일 저장”이 선택되어 있고, 제목 UI 감추기
-        radioFlatten.isChecked = true
-        labelTitle.visibility = View.GONE
-        editTitle.visibility  = View.GONE
-
-        // 저장 경로 설정 (이전 코드 유지)
-        val filesDir = getExternalFilesDir(null)!!
-        textPathView.text = "저장 경로: ${filesDir.absolutePath}"
-
-        // ② 추천 이름 만들고 기본으로 EditText 세팅 & 비활성화
+        // 추천 이름 세팅
         val suggestion = SaveAnnotatedPDF.generateSaveFileName(
             File("$originalPdfBaseName.pdf")
         )
         editTitle.setText(suggestion)
         editTitle.setSelection(suggestion.length)
-        editTitle.isEnabled = false
 
-        // ③ 라디오 선택에 따라 EditText 활성/비활성 토글
-        radioFlatten.setOnCheckedChangeListener { _, isChecked ->
-            labelTitle.visibility = if (isChecked) View.GONE else View.VISIBLE
-            editTitle.visibility  = if (isChecked) View.GONE else View.VISIBLE
-        }
-        radioSeparate.setOnCheckedChangeListener { _, isChecked ->
-            labelTitle.visibility = if (isChecked) View.VISIBLE else View.GONE
-            editTitle.visibility  = if (isChecked) View.VISIBLE else View.GONE
+        // 초기 선택: '파일 저장'
+        radioFlatten.isChecked = true
+        labelTitle.visibility = View.GONE
+        editTitle.visibility  = View.GONE
+
+        // 그룹 리스너
+        radioGroup.setOnCheckedChangeListener { _, checkedId ->
+            if (checkedId == R.id.radio_flattenPdf) {
+                labelTitle.visibility = View.GONE
+                editTitle.visibility  = View.GONE
+            } else {
+                labelTitle.visibility = View.VISIBLE
+                editTitle.visibility  = View.VISIBLE
+            }
         }
 
-        // ④ 다이얼로그 생성 — PositiveButton 내부 로직만 분기 처리
         AlertDialog.Builder(this)
             .setTitle("저장 옵션")
             .setView(dialogView)
             .setNegativeButton("취소", null)
             .setPositiveButton("저장") { _, _ ->
                 val baseName = if (radioFlatten.isChecked) {
-                    // 원본 덮어쓰기
+                    // 덮어쓰기
                     originalPdfBaseName
                 } else {
-                    // 다른 이름 저장
+                    // 다른 이름
                     editTitle.text.toString().ifBlank { suggestion }
                 }
                 val saved = SaveAnnotatedPDF.save(pdfManager, annotationCanvas, baseName)
@@ -472,6 +468,7 @@ class MainActivity : AppCompatActivity() {
             }
             .show()
     }
+
 
 
     /** Uri에서 파일 이름 추출 */

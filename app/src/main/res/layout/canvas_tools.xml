@@ -1,19 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout
-    xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/panelContainer"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
+    android:background="#E5F4E8"
     android:orientation="vertical"
-    android:background="#FFFFFF"
     android:padding="8dp">
 
     <!-- 1) 도구 버튼 4개 행 -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center">
+        android:gravity="center"
+        android:orientation="horizontal">
 
         <!-- Pen 버튼 -->
         <ImageButton
@@ -22,9 +21,9 @@
             android:layout_height="48dp"
             android:layout_marginEnd="4dp"
             android:background="@drawable/tool_button_background"
-            android:src="@drawable/tool_pen_24"
             android:contentDescription="펜"
-            android:scaleType="centerInside"/>
+            android:scaleType="centerInside"
+            android:src="@drawable/tool_pen_24" />
 
         <!-- Highlighter 버튼 -->
         <ImageButton
@@ -33,9 +32,9 @@
             android:layout_height="48dp"
             android:layout_marginEnd="4dp"
             android:background="@drawable/tool_button_background"
-            android:src="@drawable/tool_highlight_24"
             android:contentDescription="형광펜"
-            android:scaleType="centerInside"/>
+            android:scaleType="centerInside"
+            android:src="@drawable/tool_highlight_24" />
 
         <!-- Text 버튼 -->
         <ImageButton
@@ -44,36 +43,36 @@
             android:layout_height="48dp"
             android:layout_marginEnd="4dp"
             android:background="@drawable/tool_button_background"
-            android:src="@drawable/tool_text_24"
             android:contentDescription="텍스트"
-            android:scaleType="centerInside"/>
+            android:scaleType="centerInside"
+            android:src="@drawable/tool_text_24" />
 
         <!-- Eraser 버튼 -->
         <ImageButton
             android:id="@+id/btnEraser"
-            android:layout_width ="48dp"
+            android:layout_width="48dp"
             android:layout_height="48dp"
             android:background="@drawable/tool_button_background"
-            android:src="@drawable/tool_eraser_24"
             android:contentDescription="지우개"
-            android:scaleType="centerInside"/>
+            android:scaleType="centerInside"
+            android:src="@drawable/tool_eraser_24" />
     </LinearLayout>
 
     <!-- 2) 크기 조절 영역 -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
         android:gravity="center_vertical"
+        android:orientation="horizontal"
         android:paddingTop="8dp">
 
         <TextView
             android:id="@+id/canvasPreviewSizeLabel"
-            android:layout_width ="wrap_content"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginEnd="4dp"
             android:text="크기:"
-            android:textSize="14sp"
-            android:layout_marginEnd="4dp" />
+            android:textSize="14sp" />
 
         <ImageButton
             android:id="@+id/btnDecreaseSize"
@@ -81,18 +80,18 @@
             android:layout_height="48dp"
             android:layout_marginEnd="8dp"
             android:background="@drawable/tool_button_background"
-            android:src="@drawable/ic_remove_24"
             android:contentDescription="크기 감소"
-            android:scaleType="centerInside"/>
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_remove_24" />
 
         <!-- 현재 크기를 표시 -->
         <TextView
             android:id="@+id/canvasPreviewSize"
-            android:layout_width ="wrap_content"
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:paddingHorizontal="8dp"
             android:text="48"
-            android:textSize="14sp"
-            android:paddingHorizontal="8dp" />
+            android:textSize="14sp" />
 
         <!-- 크기 증가 -->
         <ImageButton
@@ -101,26 +100,26 @@
             android:layout_height="48dp"
             android:layout_marginStart="8dp"
             android:background="@drawable/tool_button_background"
-            android:src="@drawable/ic_add_24"
             android:contentDescription="크기 증가"
-            android:scaleType="centerInside"/>
+            android:scaleType="centerInside"
+            android:src="@drawable/ic_add_24" />
     </LinearLayout>
 
     <!-- 3) 색상 선택 영역 -->
     <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
         android:gravity="center_vertical"
+        android:orientation="horizontal"
         android:paddingTop="8dp">
 
         <TextView
             android:id="@+id/canvasPreviewColorLabel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
+            android:layout_marginEnd="4dp"
             android:text="색:"
-            android:textSize="14sp"
-            android:layout_marginEnd="4dp" />
+            android:textSize="14sp" />
 
         <View
             android:id="@+id/canvasPreviewColor"
