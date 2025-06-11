@@ -117,6 +117,7 @@ class PlayActivity : AppCompatActivity() {
     private fun setupPlaybackManager() {
         midiPlaybackManager = MidiPlaybackManager(
             context = this,
+            pageCount = pageCount,
             onTimeUpdate = { currentMillis, totalMillis ->
                 updateTimeDisplay(currentMillis, totalMillis)
                 updateCurrentLine(currentMillis)
@@ -130,11 +131,6 @@ class PlayActivity : AppCompatActivity() {
             onPageTransition = { pageNumber ->
                 if (pageChangeTimes.isEmpty()) {
                     viewPager.setCurrentItem(pageNumber, true)
-                }
-            },
-            onError = { errorMessage ->
-                runOnUiThread {
-                    Toast.makeText(this, errorMessage, Toast.LENGTH_LONG).show()
                 }
             }
         )
@@ -318,8 +314,15 @@ class PlayActivity : AppCompatActivity() {
     private fun openMusicXmlFilePicker() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
-            type = "text/xml"
-            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/xml", "text/xml"))
+            type = "*/*"
+            putExtra(Intent.EXTRA_MIME_TYPES, arrayOf(
+                "text/xml",
+                "application/xml",
+                "application/vnd.recordare.musicxml+xml",
+                "application/vnd.recordare.musicxml",
+                "application/x-musicxml+xml",
+                "application/x-musicxml"
+            ))
         }
         startActivityForResult(intent, PICK_MUSICXML_FILE)
     }
@@ -371,17 +374,39 @@ class PlayActivity : AppCompatActivity() {
 
     private fun handleMusicXmlFileSelection(uri: Uri) {
         try {
+            val fileName = getFileNameFromUri(uri)
+            Log.d("PlayActivity", "Selected MusicXML file: $fileName")
+            
             val inputStream = contentResolver.openInputStream(uri)
                 ?: throw IOException("파일을 열 수 없습니다")
+            
             val tempXml = File.createTempFile("selected_musicxml", ".xml", cacheDir)
             tempXml.outputStream().use { output ->
                 inputStream.copyTo(output)
             }
+            
+            // 파일 내용 확인
+            if (tempXml.length() == 0L) {
+                throw IOException("파일이 비어있습니다")
+            }
+            
             musicXmlPath = tempXml.absolutePath
             pageChangeTimes = MusicXmlParser.parsePageChangeTimes(tempXml)
             currentLines = MusicXmlParser.parseLines(tempXml)
-            Toast.makeText(this, "MusicXML 파일이 성공적으로 로드되었습니다.", Toast.LENGTH_SHORT).show()
+            
+            // 상태 저장
+            savePlaybackState()
+            
+            // UI 업데이트
+            if (pageChangeTimes.isNotEmpty()) {
+                Log.d("PlayActivity", "MusicXML file loaded successfully. Page changes: ${pageChangeTimes.size}, Lines: ${currentLines.size}")
+                Toast.makeText(this, "MusicXML 파일이 성공적으로 로드되었습니다.", Toast.LENGTH_SHORT).show()
+            } else {
+                Log.w("PlayActivity", "MusicXML file loaded but no page changes found")
+                Toast.makeText(this, "MusicXML 파일이 로드되었지만 페이지 변경 정보가 없습니다.", Toast.LENGTH_SHORT).show()
+            }
         } catch (e: Exception) {
+            Log.e("PlayActivity", "Error loading MusicXML file", e)
             Toast.makeText(this, "MusicXML 파일 처리 중 오류: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
@@ -428,7 +453,7 @@ class PlayActivity : AppCompatActivity() {
     }
 
     private fun clearPdfSpecificSettings(prefs: SharedPreferences, pdfPath: String) {
-        val pdfHash = pdfPath.hashCode()
+        val pdfHash = pdfPath.hashCode().toString()
         prefs.edit().apply {
             remove("sync_offset_ms_$pdfHash")
             remove("start_delay_sec_$pdfHash")
@@ -440,7 +465,7 @@ class PlayActivity : AppCompatActivity() {
     }
 
     private fun loadPdfSpecificSettings(prefs: SharedPreferences, pdfPath: String) {
-        val pdfHash = pdfPath.hashCode()
+        val pdfHash = pdfPath.hashCode().toString()
         val syncOffset = prefs.getInt("sync_offset_ms_$pdfHash", 0)
         val startDelay = prefs.getInt("start_delay_sec_$pdfHash", 0)
         syncOffsetInput.setText(syncOffset.toString())
@@ -448,17 +473,18 @@ class PlayActivity : AppCompatActivity() {
     }
 
     private fun applyPdfSpecificSettings(prefs: SharedPreferences, pdfPath: String?) {
-        pdfPath ?: return
-        val pdfHash = pdfPath.hashCode()
+        if (pdfPath == null) return
+        
+        val pdfHash = pdfPath.hashCode().toString()
         val syncValue = syncOffsetInput.text.toString().toIntOrNull()
         val delayValue = startDelayInput.text.toString().toIntOrNull()
-
+        
         prefs.edit().apply {
             if (syncValue != null) putInt("sync_offset_ms_$pdfHash", syncValue)
             if (delayValue != null) putInt("start_delay_sec_$pdfHash", delayValue)
             apply()
         }
-
+        
         Toast.makeText(this, "싱크 오프셋 및 시작 지연 설정이 적용되었습니다.", Toast.LENGTH_SHORT).show()
     }
 

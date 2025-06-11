@@ -36,6 +36,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var thumbnailContainer: FrameLayout
     private var pageBar: PageBar? = null
     private var fragThumbnail: Frag_Thumbnail? = null
+    private lateinit var midiPlaybackManager: MidiPlaybackManager
+    private lateinit var scoreMetadata: ScoreMetadata
 
     private lateinit var annotationCanvas: AnnotationCanvasView
     private lateinit var btnPen: ImageButton
@@ -167,6 +169,21 @@ class MainActivity : AppCompatActivity() {
         }
 
         openFilePicker()
+
+        // ScoreMetadata 초기화
+        scoreMetadata = ScoreMetadata(this)
+
+        // MidiPlaybackManager 초기화
+        midiPlaybackManager = MidiPlaybackManager(
+            context = this,
+            pageCount = pdfManager.pageCount(),
+            onPageTransition = { page ->
+                viewPager.setCurrentItem(page, true)
+            },
+            onTimeUpdate = { current, total ->
+                // 시간 업데이트 처리
+            }
+        )
     }
 
     private fun toggleTool(tool: Tool, button: ImageButton) {
@@ -283,6 +300,12 @@ class MainActivity : AppCompatActivity() {
             currentMusicXmlFile = findFileInCommonDirs(musicXmlName)
         }
 
+        // PDF 파일과 같은 이름의 메타데이터 JSON 파일 찾기
+        val metadataFile = File(pdfFile.parent, "${pdfFile.nameWithoutExtension}_metadata.json")
+        if (metadataFile.exists()) {
+            scoreMetadata.loadMetadata(metadataFile)
+            midiPlaybackManager.setScoreMetadata(scoreMetadata)
+        }
     }
 
     private fun handleThumbnailRequest(bitmap: Bitmap, x: Int, y: Int) {

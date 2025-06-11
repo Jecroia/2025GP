@@ -16,9 +16,9 @@ import java.nio.ByteOrder
 
 class MidiPlaybackManager(
     private val context: Context,
-    private val onTimeUpdate: (currentMillis: Int, totalMillis: Int) -> Unit,
-    private val onPageTransition: (pageNumber: Int) -> Unit,
-    private val onError: (errorMessage: String) -> Unit
+    private val pageCount: Int,
+    private val onPageTransition: (Int) -> Unit,
+    private val onTimeUpdate: (Int, Int) -> Unit
 ) {
     sealed class MidiError : Exception {
         constructor(message: String) : super(message)
@@ -34,23 +34,24 @@ class MidiPlaybackManager(
         class InvalidDuration : MidiError("MIDI 파일의 재생 시간을 계산할 수 없습니다")
     }
 
-    private var isPlaying = false
-    private var currentMillis = 0
-    private var totalMillis = 0
-    private var isCountdownActive = false
-    private var countdownSeconds = 0
-    private var syncOffset = 0  // 싱크 오프셋 (밀리초)
+    private var currentMillis: Int = 0
+    private var totalMillis: Int = 0
+    private var isPlaying: Boolean = false
+    private var isCountdownActive: Boolean = false
+    private var countdownSeconds: Int = 0
+    private var currentMeasure: Int = 1
+    private var scoreMetadata: ScoreMetadata? = null
     
-    private lateinit var handler: Handler
+    private val handler = Handler(Looper.getMainLooper())
     private lateinit var updateRunnable: Runnable
     private lateinit var countdownRunnable: Runnable
     private lateinit var midiManager: MidiManager
     private var midiDevice: MidiDevice? = null
     private var midiInputPort: MidiInputPort? = null
     private var pageTransitionEvents: List<PageTransitionEvent> = emptyList()
-    private var pageCount = 0
     private var midiHeader: MidiLoader.MidiHeader? = null
     private var lastPage = -1  // 마지막으로 전환된 페이지 추적
+    private var syncOffset: Int = 0  // 싱크 오프셋 (밀리초)
 
     data class PageTransitionEvent(
         val timestamp: Long,  // MIDI 틱 기준 시간
@@ -59,7 +60,6 @@ class MidiPlaybackManager(
     )
 
     init {
-        handler = Handler(Looper.getMainLooper())
         midiManager = context.getSystemService(Context.MIDI_SERVICE) as MidiManager
     }
 
@@ -74,16 +74,13 @@ class MidiPlaybackManager(
                 throw MidiError.InvalidDuration()
             }
             
-            pageCount = totalPages
             loadMidiEvents(midiFile)
         } catch (e: MidiError) {
             Log.e("MidiPlaybackManager", "MIDI 초기화 실패", e)
-            onError(e.localizedMessage ?: "알 수 없는 MIDI 오류가 발생했습니다")
             throw e
         } catch (e: Exception) {
             val error = MidiError.SystemError(e)
             Log.e("MidiPlaybackManager", "MIDI 초기화 실패", e)
-            onError(error.localizedMessage ?: "알 수 없는 MIDI 오류가 발생했습니다")
             throw error
         }
     }
@@ -129,9 +126,16 @@ class MidiPlaybackManager(
 
     fun seekTo(millis: Int) {
         currentMillis = millis.coerceIn(0, totalMillis)
-        // seek 시 즉시 페이지 전환
-        val page = (currentMillis.toFloat() / totalMillis * pageCount).toInt().coerceIn(0, pageCount - 1)
-        onPageTransition(page)
+        
+        // 현재 시간에 해당하는 마디 찾기 (싱크 오프셋 고려)
+        val targetMeasure = findMeasureForTime(millis - syncOffset)
+        currentMeasure = targetMeasure
+        
+        // 해당 마디의 페이지로 이동
+        scoreMetadata?.getPageForMeasure(targetMeasure)?.let { page ->
+            onPageTransition(page)
+        }
+        
         updatePlaybackState()
     }
 
@@ -176,11 +180,27 @@ class MidiPlaybackManager(
     }
 
     private fun updatePlaybackState() {
-        onTimeUpdate(currentMillis, totalMillis)
+        if (!isPlaying) return
         
-        // 단순 시간 기반 페이지 계산 (이전 버전과 동일한 로직)
-        val page = (currentMillis.toFloat() / totalMillis * pageCount).toInt().coerceIn(0, pageCount - 1)
-        onPageTransition(page)
+        // 현재 마디에 해당하는 페이지로 전환
+        scoreMetadata?.getPageForMeasure(currentMeasure)?.let { targetPage ->
+            onPageTransition(targetPage)
+        }
+        
+        // 다음 마디로 진행
+        currentMeasure++
+        
+        // BPM에 따른 시간 업데이트
+        val bpm = scoreMetadata?.getBpm() ?: 120f
+        val millisPerMeasure = (60000f / bpm * 4).toInt() // 4/4 박자 기준
+        currentMillis += millisPerMeasure
+        
+        // 싱크 오프셋은 한 번만 적용
+        if (currentMeasure == 1) {
+            currentMillis += syncOffset
+        }
+        
+        onTimeUpdate(currentMillis, totalMillis)
     }
 
     private fun loadMidiEvents(midiFile: File) {
@@ -194,9 +214,18 @@ class MidiPlaybackManager(
             
         } catch (e: Exception) {
             Log.e("MidiPlaybackManager", "MIDI 파일 로드 실패", e)
-            onError("MIDI 파일을 로드하는 중 오류가 발생했습니다: ${e.localizedMessage ?: "알 수 없는 오류"}")
-            pageTransitionEvents = emptyList()
+            throw e
         }
+    }
+
+    fun setScoreMetadata(metadata: ScoreMetadata) {
+        scoreMetadata = metadata
+    }
+
+    private fun findMeasureForTime(millis: Int): Int {
+        val bpm = scoreMetadata?.getBpm() ?: 120f
+        val millisPerMeasure = (60000f / bpm * 4).toInt() // 4/4 박자 기준
+        return (millis / millisPerMeasure).toInt() + 1
     }
 
     fun setSyncOffset(offset: Int) {
