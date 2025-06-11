@@ -9,6 +9,7 @@ import androidx.viewpager2.widget.ViewPager2
 import com.artifex.mupdf.fitz.ColorSpace
 import com.artifex.mupdf.fitz.Matrix
 import com.github.chrisbanes.photoview.PhotoViewAttacher
+import androidx.core.graphics.createBitmap
 
 class PDFPagerAdapter(
     private val pdfManager: PdfManager,
@@ -57,16 +58,20 @@ class PDFPagerAdapter(
             val page = pdfManager.loadPage(position)
             val pixmap = page.toPixmap(Matrix.Scale(1.0f), ColorSpace.DeviceRGB, true, true)
 
-            // 새 Bitmap 생성
-            val bitmap = Bitmap.createBitmap(
-                pixmap.width,
-                pixmap.height,
-                Bitmap.Config.ARGB_8888
-            )
-            bitmap.setPixels(
-                pixmap.pixels, 0, pixmap.width,
-                0, 0, pixmap.width, pixmap.height
-            )
+            // 1) raw 배열 가져오기
+            val raw = pixmap.pixels
+            // 2) ABGR → ARGB로 R/B 채널 스왑
+            for (i in raw.indices) {
+                val px = raw[i]
+                val a = (px ushr 24) and 0xFF
+                val b = (px ushr 16) and 0xFF
+                val g = (px ushr  8) and 0xFF
+                val r = px and 0xFF
+                raw[i] = (a shl 24) or (r shl 16) or (g shl 8) or b
+            }
+            // 3) 스왑된 raw로 비트맵 생성
+            val bitmap = Bitmap.createBitmap(pixmap.width, pixmap.height, Bitmap.Config.ARGB_8888)
+            bitmap.setPixels(raw, 0, pixmap.width, 0, 0, pixmap.width, pixmap.height)
 
             page.destroy()
             pixmap.destroy()

@@ -1,9 +1,7 @@
 package com.example.scoreviewer
 
-import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.graphics.Color
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Bundle
@@ -13,7 +11,6 @@ import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
-import android.widget.Button
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
@@ -28,6 +25,8 @@ import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.larswerkman.holocolorpicker.ColorPicker
 import java.io.File
+import androidx.core.view.isVisible
+import androidx.core.content.edit
 
 class MainActivity : AppCompatActivity() {
 
@@ -69,7 +68,7 @@ class MainActivity : AppCompatActivity() {
     private var currentPdfFile: File? = null
     private var currentMidiFile: File? = null
 
-    private val PICK_PDF_FILE = 1001
+    private val pickPDFFile = 1001
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -278,12 +277,12 @@ class MainActivity : AppCompatActivity() {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "application/pdf"
         }
-        startActivityForResult(intent, PICK_PDF_FILE)
+        startActivityForResult(intent, pickPDFFile)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == PICK_PDF_FILE && resultCode == RESULT_OK) {
+        if (requestCode == pickPDFFile && resultCode == RESULT_OK) {
             data?.data?.let { uri ->
                 currentPdfUri = uri
                 copyUriToTempFile(uri)?.let { file ->
@@ -314,7 +313,7 @@ class MainActivity : AppCompatActivity() {
 
         viewPager.adapter = PDFPagerAdapter(pdfManager, count, annotationCanvas, viewPager)
         annotationCanvas.clearAll()
-
+        66
         val prefs = getSharedPreferences("PlaybackPrefs", MODE_PRIVATE)
         prefs.edit().putString("last_pdf", pdfFile.absolutePath).apply()
 
@@ -358,7 +357,7 @@ class MainActivity : AppCompatActivity() {
         if (midiFile.exists()) {
             currentMidiFile = midiFile
         } else {
-            prefs.edit().remove("last_midi").apply()
+            prefs.edit { remove("last_midi") }
         }
     }
 
@@ -447,8 +446,14 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton("저장") { _, _ ->
                 val title = editTitle.text.toString().ifBlank { defaultName }
                 val method = if (radioFlatten.isChecked) "PDF로 저장" else "별도 파일로 저장"
-                // TODO: 실제 저장 로직 호출 (e.g. saveAnnotatedPdf(title, method))
+                val savedFile = SaveAnnotatedPDF.save(
+                    pdfManager,
+                    annotationCanvas,
+                    title
+                )
                 Toast.makeText(this, "저장: $title ($method)", Toast.LENGTH_SHORT).show()
+                openPdf(savedFile)
+
             }
             .show()
     }
@@ -493,7 +498,7 @@ class MainActivity : AppCompatActivity() {
 
     /** 툴 설정 패널이 열려 있는 상태에서, 패널 외부를 터치하면 닫기 */
     override fun dispatchTouchEvent(ev: MotionEvent): Boolean {
-        if (canvasToolsPanel.visibility == View.VISIBLE && ev.action == MotionEvent.ACTION_DOWN) {
+        if (canvasToolsPanel.isVisible && ev.action == MotionEvent.ACTION_DOWN) {
             val rect = Rect()
             canvasToolsPanel.getGlobalVisibleRect(rect)
             val x = ev.rawX.toInt()

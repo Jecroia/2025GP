@@ -218,7 +218,6 @@ class CanvasToolController(
     /** 가져오기 */
     fun getCurrentTool(): Tool = currentTool
     fun getTextColor(): Int = textColor
-    fun getTextSize(): Float = textSize
 
     /** 사이즈 갱신 */
     private fun updateSizeUI() {

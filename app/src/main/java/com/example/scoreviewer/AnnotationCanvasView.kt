@@ -331,9 +331,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
                 val baseRgb = customColor and 0x00FFFFFF
                 val translucent = (0x44 shl 24) or baseRgb
                 color = translucent
-
                 strokeWidth = customSize
-                // 지우개 모드가 아니므로 xfermode는 설정하지 않습니다.
             }
 
             Tool.TEXT -> {
