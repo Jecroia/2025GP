@@ -10,6 +10,36 @@ import java.io.File
 import java.io.FileOutputStream
 
 object SaveAnnotatedPDF {
+
+    fun generateSaveFileName(originalFile: File): String {
+        // 1) 다운로드 폴더 가져오기
+        val downloadsDir = Environment
+            .getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        if (!downloadsDir.exists()) downloadsDir.mkdirs()
+
+        // 2) 파일명에서 _svN 접미사를 제거해 "루트" 이름만 뽑기
+        val root = originalFile.nameWithoutExtension
+            .replace(Regex("_sv(\\d+)?$"), "")
+
+        // 3) 다운로드 폴더 내에서 root_sv, root_sv2, root_sv3… 와 매칭되는 파일들 검색
+        val pattern = Regex("^${Regex.escape(root)}_sv(\\d+)?\$")
+        var maxIndex = 0
+        downloadsDir.listFiles { f ->
+            f.extension.equals("pdf", ignoreCase = true)
+                    && pattern.matches(f.nameWithoutExtension)
+        }?.forEach { f ->
+            val suffix = f.nameWithoutExtension.removePrefix("${root}_sv")
+            // suffix가 빈 문자열이면 index=1, 아니면 parseInt
+            val idx = suffix.toIntOrNull() ?: 1
+            if (idx > maxIndex) maxIndex = idx
+        }
+
+        // 4) 다음 인덱스 계산
+        val next = maxIndex + 1
+        return if (next == 1) "${root}_sv" else "${root}_sv$next"
+    }
+
+
     fun save(
         pdfManager: PdfManager,
         annotationView: AnnotationCanvasView,

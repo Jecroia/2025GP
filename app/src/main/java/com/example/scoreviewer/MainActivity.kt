@@ -416,47 +416,63 @@ class MainActivity : AppCompatActivity() {
     private fun showSaveDialog() {
         // 다이얼로그 뷰 inflate
         val dialogView = layoutInflater.inflate(R.layout.dialog_save_options, null)
+        val labelTitle    = dialogView.findViewById<TextView>(R.id.labelTitle)
         val editTitle = dialogView.findViewById<EditText>(R.id.editTitle)
         val textPathView = dialogView.findViewById<TextView>(R.id.textPath)
         val radioFlatten = dialogView.findViewById<RadioButton>(R.id.radio_flattenPdf)
         val radioSeparate = dialogView.findViewById<RadioButton>(R.id.radio_separate)
 
-        // 기본 파일명 계산
-        val filesDir = getExternalFilesDir(null)!!
-        val baseName = "${originalPdfBaseName}_sv"
-        val count = filesDir.listFiles { f ->
-            f.extension.equals("pdf", ignoreCase = true)
-                    && f.nameWithoutExtension.startsWith(baseName)
-        }?.size ?: 0
-        val defaultName = if (count <= 1) baseName else "${baseName}_$count"
+        // ① 라벨만 변경
+        radioFlatten.text  = "파일 저장"
+        radioSeparate.text = "다른 이름으로 파일 저장"
 
-        // 뷰 초기화
-        editTitle.apply {
-            setText(defaultName)
-            setSelection(text.length)
-        }
-        textPathView.text = "저장 경로: ${filesDir.absolutePath}"
+        // ② 기본 상태: “파일 저장”이 선택되어 있고, 제목 UI 감추기
         radioFlatten.isChecked = true
+        labelTitle.visibility = View.GONE
+        editTitle.visibility  = View.GONE
 
-        // 다이얼로그 생성
+        // 저장 경로 설정 (이전 코드 유지)
+        val filesDir = getExternalFilesDir(null)!!
+        textPathView.text = "저장 경로: ${filesDir.absolutePath}"
+
+        // ② 추천 이름 만들고 기본으로 EditText 세팅 & 비활성화
+        val suggestion = SaveAnnotatedPDF.generateSaveFileName(
+            File("$originalPdfBaseName.pdf")
+        )
+        editTitle.setText(suggestion)
+        editTitle.setSelection(suggestion.length)
+        editTitle.isEnabled = false
+
+        // ③ 라디오 선택에 따라 EditText 활성/비활성 토글
+        radioFlatten.setOnCheckedChangeListener { _, isChecked ->
+            labelTitle.visibility = if (isChecked) View.GONE else View.VISIBLE
+            editTitle.visibility  = if (isChecked) View.GONE else View.VISIBLE
+        }
+        radioSeparate.setOnCheckedChangeListener { _, isChecked ->
+            labelTitle.visibility = if (isChecked) View.VISIBLE else View.GONE
+            editTitle.visibility  = if (isChecked) View.VISIBLE else View.GONE
+        }
+
+        // ④ 다이얼로그 생성 — PositiveButton 내부 로직만 분기 처리
         AlertDialog.Builder(this)
-            .setTitle("필기 저장")
+            .setTitle("저장 옵션")
             .setView(dialogView)
             .setNegativeButton("취소", null)
             .setPositiveButton("저장") { _, _ ->
-                val title = editTitle.text.toString().ifBlank { defaultName }
-                val method = if (radioFlatten.isChecked) "PDF로 저장" else "별도 파일로 저장"
-                val savedFile = SaveAnnotatedPDF.save(
-                    pdfManager,
-                    annotationCanvas,
-                    title
-                )
-                Toast.makeText(this, "저장: $title ($method)", Toast.LENGTH_SHORT).show()
-                openPdf(savedFile)
-
+                val baseName = if (radioFlatten.isChecked) {
+                    // 원본 덮어쓰기
+                    originalPdfBaseName
+                } else {
+                    // 다른 이름 저장
+                    editTitle.text.toString().ifBlank { suggestion }
+                }
+                val saved = SaveAnnotatedPDF.save(pdfManager, annotationCanvas, baseName)
+                Toast.makeText(this, "${saved.name}에 저장했습니다.", Toast.LENGTH_SHORT).show()
+                openPdf(saved)
             }
             .show()
     }
+
 
     /** Uri에서 파일 이름 추출 */
     private fun queryFileName(uri: Uri): String? {

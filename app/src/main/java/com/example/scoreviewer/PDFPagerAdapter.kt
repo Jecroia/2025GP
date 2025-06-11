@@ -9,7 +9,6 @@ import androidx.viewpager2.widget.ViewPager2
 import com.artifex.mupdf.fitz.ColorSpace
 import com.artifex.mupdf.fitz.Matrix
 import com.github.chrisbanes.photoview.PhotoViewAttacher
-import androidx.core.graphics.createBitmap
 
 class PDFPagerAdapter(
     private val pdfManager: PdfManager,
@@ -45,6 +44,7 @@ class PDFPagerAdapter(
     }
 
     override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
+
         holder.attacher?.let {
             // cleanup() 메서드가 없는 버전을 위해 단순히 참조만 끊습니다.
             holder.attacher = null
