@@ -414,4 +414,16 @@ class AnnotationCanvasView @JvmOverloads constructor(
         globalRedoStack.clear()
         invalidate()
     }
+    fun renderAnnotationsToBitmap(width: Int, height: Int): Bitmap {
+        // 1) 페이지 설정
+        val page = currentPage
+        // 2) 원하는 크기를 가진 ARGB_8888 비트맵 생성
+        val bm = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+        val c  = Canvas(bm)
+        // 3) View가 화면에 그릴 때 쓰는 내부 매트릭스 그대로 가져오기
+        c.concat(this.imageTransformationMatrix)
+        // 4) onDraw 로 모든 stroke 그리기
+        this.draw(c)
+        return bm
+    }
 }
