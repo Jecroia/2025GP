@@ -107,10 +107,10 @@
         android:layout_height ="0dp"
         android:clickable     ="true"
         android:focusable     ="true"
-        app:layout_constraintTop_toBottomOf   ="@id/pageSeekBar"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf ="parent"
-        app:layout_constraintEnd_toEndOf     ="parent"/>
+        app:layout_constraintTop_toTopOf="@id/viewPager"
+        app:layout_constraintBottom_toBottomOf="@id/viewPager"
+        app:layout_constraintStart_toStartOf="@id/viewPager"
+        app:layout_constraintEnd_toEndOf="@id/viewPager"/>
 
     <!-- 썸네일/Inline-EditText 컨테이너 -->
     <FrameLayout
