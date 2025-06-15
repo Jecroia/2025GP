@@ -146,26 +146,4 @@ object SaveAnnotatedPDF {
         pdf.close()
         return outFile
     }
-
-    fun getImageDisplayRect(imageView: ImageView): RectF {
-        val drawable = imageView.drawable ?: return RectF()
-        val matrix = imageView.imageMatrix
-
-        // matrix 값 꺼내기
-        val values = FloatArray(9)
-        matrix.getValues(values)
-        val scaleX = values[AndroidMatrix.MSCALE_X]
-        val scaleY = values[AndroidMatrix.MSCALE_Y]
-        val transX = values[AndroidMatrix.MTRANS_X]
-        val transY = values[AndroidMatrix.MTRANS_Y]
-
-        // 원본 픽셀 크기 × 스케일 = 화면에 그려진 크기
-        val origW = drawable.intrinsicWidth.toFloat()
-        val origH = drawable.intrinsicHeight.toFloat()
-        val dispW = origW * scaleX
-        val dispH = origH * scaleY
-
-        // 화면 좌표계에서의 실제 영역
-        return RectF(transX, transY, transX + dispW, transY + dispH)
-    }
 }

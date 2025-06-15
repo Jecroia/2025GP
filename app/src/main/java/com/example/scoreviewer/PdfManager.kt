@@ -11,7 +11,7 @@ class PdfManager {
         doc?.destroy()
         doc = Document.openDocument(path)
     }
-
+    fun getDocument(): Document = doc ?: error("문서가 열려있지 않습니다.")
     /** 문서를 닫고 레퍼런스 해제 */
     fun close() {
         doc?.destroy()
