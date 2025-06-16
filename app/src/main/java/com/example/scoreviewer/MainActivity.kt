@@ -321,7 +321,8 @@ class MainActivity : AppCompatActivity() {
 
     /** PDF 열어서 ViewPager에 연결 */
     private fun openPdf(pdfFile: File) {
-        viewPager.offscreenPageLimit = 1
+        viewPager.offscreenPageLimit = 2
+        (viewPager.getChildAt(0) as RecyclerView).setItemViewCacheSize(2)
         currentPdfFile = pdfFile
         pdfManager.open(pdfFile.absolutePath)
         val count = pdfManager.pageCount()
