@@ -76,6 +76,10 @@ class PDFPagerAdapter(
 
     /** MuPDF → Android Bitmap 변환 로직 */
     private fun renderPage(idx: Int): Bitmap {
+        val total = pdfManager.pageCount()
+        if (idx < 0 || idx >= total) {
+            return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+        }
         val page = pdfManager.loadPage(idx)
         val pix = page.toPixmap(Matrix.Scale(1.0f), ColorSpace.DeviceRGB, true, true)
         val raw = pix.pixels
