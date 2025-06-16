@@ -42,7 +42,6 @@ class PlayActivity : AppCompatActivity() {
     private lateinit var midiPlaybackManager: MidiPlaybackManager
     private lateinit var syncPanelManager: SyncPanelManager
     private lateinit var playbackState: PlaybackState
-    private lateinit var musicXMLParser: MusicXMLParser
 
     private lateinit var syncOffsetInput: EditText
     private lateinit var startDelayInput: EditText
@@ -52,14 +51,12 @@ class PlayActivity : AppCompatActivity() {
     private var midiPath: String? = null
     private var musicXmlPath: String? = null
     private var pageChangeTimes: List<Int> = emptyList()
+    private var currentLines: List<MusicXmlParser.Line> = emptyList()
     private var currentLineIndex = -1
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_play)
-        
-        // MusicXMLParser 초기화
-        musicXMLParser = MusicXMLParser(this)
         
         // 권한 체크 및 요청
         checkAndRequestPermissions()
@@ -87,8 +84,10 @@ class PlayActivity : AppCompatActivity() {
         if (midiPath != null) loadMidiFile()
         if (musicXmlPath != null) {
             val xmlFile = File(musicXmlPath!!)
-            // MusicXMLParser를 사용하여 페이지 변경 시간 계산
-            musicXMLParser.setPage(1) // 첫 페이지부터 시작
+            if (xmlFile.exists()) {
+                pageChangeTimes = MusicXmlParser.parsePageChangeTimes(xmlFile)
+                currentLines = MusicXmlParser.parseLines(xmlFile)
+            }
         }
         setupControlButtons()
         setupSeekBar()
@@ -537,22 +536,13 @@ class PlayActivity : AppCompatActivity() {
 
     private fun updateCurrentLine(currentMillis: Int) {
         if (currentLines.isEmpty()) return
-
+        
         val newLineIndex = currentLines.indexOfLast { it.startTimeMs <= currentMillis }
-        if (newLineIndex != currentLineIndex) {
+        if (newLineIndex != -1 && newLineIndex != currentLineIndex) {
             currentLineIndex = newLineIndex
-            if (currentLineIndex >= 0) {
-                val currentLine = currentLines[currentLineIndex]
-                // 현재 줄 하이라이트 처리
-                (viewPager.adapter as? PDFPagerAdapter)?.highlightLine(currentLine.pageNumber, currentLine.lineNumber)
-                
-                // 현재 연주 중인 마디 번호 표시
-                val currentMeasures = currentLine.measureNumbers
-                if (currentMeasures.isNotEmpty()) {
-                    val measureText = "마디: ${currentMeasures.first()}-${currentMeasures.last()}"
-                    timeText.text = "${timeText.text} ($measureText)"
-                }
-            }
+            val currentLine = currentLines[currentLineIndex]
+            // 현재 줄에 대한 처리
+            Log.d("PlayActivity", "Current line: ${currentLine.pageNumber}, Time: ${currentLine.startTimeMs}-${currentLine.endTimeMs}")
         }
     }
 }

@@ -20,45 +20,47 @@ class HighlightView @JvmOverloads constructor(
     }
 
     private var currentPage = 1
-    private var musicXMLParser: MusicXMLParser? = null
+    private var currentLines: List<MusicXmlParser.Line> = emptyList()
 
-    fun setMusicXMLParser(parser: MusicXMLParser) {
-        musicXMLParser = parser
+    fun setLines(lines: List<MusicXmlParser.Line>) {
+        currentLines = lines
         invalidate()
     }
 
     fun setPage(page: Int) {
         currentPage = page
-        musicXMLParser?.setPage(page)
         invalidate()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         
-        musicXMLParser?.let { parser ->
-            // 마진 정보 가져오기
-            val (topMarginPercent, bottomMarginPercent) = parser.getPageMargins()
-            
-            // 실제 사용 가능한 영역 계산
-            val usableHeight = height * (1 - (topMarginPercent + bottomMarginPercent) / 100)
-            val startY = height * (topMarginPercent / 100)
-            
-            // 하이라이트를 위한 줄 수 계산 (8페이지는 5등분)
-            val highlightLineCount = parser.getLineCount()
-            // 실제 내용이 있는 줄 수 계산
-            val actualLineCount = parser.getActualLineCount()
-            
-            Log.d("HighlightView", "Current page has $actualLineCount actual lines, but will be divided into $highlightLineCount sections")
-            
-            // 각 줄의 높이 계산
-            val lineHeight = usableHeight / highlightLineCount
-            
-            // 현재 시간에 해당하는 줄 계산 (예시: 0-1초는 첫 번째 줄)
-            val currentTime = System.currentTimeMillis() / 1000.0
-            val lineIndex = (currentTime % highlightLineCount).toInt()
-            
-            // 하이라이트 영역 그리기
+        if (currentLines.isEmpty()) return
+
+        // 현재 페이지의 줄들만 필터링
+        val pageLines = currentLines.filter { it.pageNumber == currentPage }
+        if (pageLines.isEmpty()) return
+
+        // 마진 정보 가져오기 (기본값: 상단 10%, 하단 10%)
+        val topMarginPercent = 10f
+        val bottomMarginPercent = 10f
+        
+        // 실제 사용 가능한 영역 계산
+        val usableHeight = height * (1 - (topMarginPercent + bottomMarginPercent) / 100)
+        val startY = height * (topMarginPercent / 100)
+        
+        // 하이라이트를 위한 줄 수 계산
+        val highlightLineCount = pageLines.size
+        
+        // 각 줄의 높이 계산
+        val lineHeight = usableHeight / highlightLineCount
+        
+        // 현재 시간에 해당하는 줄 계산
+        val currentTime = System.currentTimeMillis()
+        val currentLine = pageLines.findLast { it.startTimeMs <= currentTime }
+        
+        currentLine?.let { line ->
+            val lineIndex = pageLines.indexOf(line)
             val highlightTop = startY + (lineHeight * lineIndex)
             val highlightBottom = highlightTop + lineHeight
             
