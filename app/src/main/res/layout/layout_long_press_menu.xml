@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/long_press_menu"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="16dp"
+    android:background="?attr/colorSurface"
+    android:elevation="8dp"
+    android:gravity="center">
+
+    <ImageButton
+        android:id="@+id/btn_bookmark_toggle"
+        style="@style/Widget.AppCompat.ImageButton"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:contentDescription="북마크 토글"
+        android:src="@drawable/ic_star_off_24"
+        app:tint="?attr/colorOnSurface" />
+
+    <ImageButton
+        android:id="@+id/btn_bookmark_list"
+        style="@style/Widget.AppCompat.ImageButton"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:contentDescription="북마크 이동"
+        android:src="@drawable/ic_bookmarks_24"
+        android:layout_marginStart="16dp"
+        app:tint="?attr/colorOnSurface" />
+
+    <ImageButton
+        android:id="@+id/btn_add_page"
+        style="@style/Widget.AppCompat.ImageButton"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:contentDescription="페이지 추가"
+        android:src="@drawable/ic_page_add_24"
+        android:layout_marginStart="16dp"
+        app:tint="?attr/colorOnSurface" />
+
+    <ImageButton
+        android:id="@+id/btn_delete_page"
+        style="@style/Widget.AppCompat.ImageButton"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:contentDescription="페이지 삭제"
+        android:src="@drawable/ic_page_delete_24"
+        android:layout_marginStart="16dp"
+        app:tint="?attr/colorOnSurface" />
+</LinearLayout>

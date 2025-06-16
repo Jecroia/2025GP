@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.provider.OpenableColumns
+import android.util.Log
 import android.view.inputmethod.InputMethodManager
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -30,6 +31,7 @@ import com.larswerkman.holocolorpicker.ColorPicker
 import java.io.File
 import androidx.core.view.isVisible
 import androidx.core.content.edit
+import com.google.android.material.bottomsheet.BottomSheetDialog
 
 class MainActivity : AppCompatActivity() {
 
@@ -537,5 +539,57 @@ class MainActivity : AppCompatActivity() {
             }
         }
         return super.dispatchTouchEvent(ev)
+    }
+
+    private fun showLongPressMenu() {
+        val dialog = BottomSheetDialog(this)
+        val sheet = layoutInflater.inflate(R.layout.layout_long_press_menu, null)
+        dialog.setContentView(sheet)
+
+        val btnToggle = sheet.findViewById<ImageButton>(R.id.btn_bookmark_toggle)
+        val btnList   = sheet.findViewById<ImageButton>(R.id.btn_bookmark_list)
+        val btnAdd    = sheet.findViewById<ImageButton>(R.id.btn_add_page)
+        val btnDel    = sheet.findViewById<ImageButton>(R.id.btn_delete_page)
+
+        // 현재 페이지 index
+        val currentPage = viewPager.currentItem
+
+        btnToggle.setOnClickListener {
+            toggleBookmark(currentPage)
+            dialog.dismiss()
+        }
+
+        btnList.setOnClickListener {
+            openBookmarkList()
+            dialog.dismiss()
+        }
+
+        btnAdd.setOnClickListener {
+            promptAddPage(currentPage)
+            dialog.dismiss()
+        }
+
+        btnDel.setOnClickListener {
+            promptDeletePage(currentPage)
+            dialog.dismiss()
+        }
+
+        dialog.show()
+    }
+
+    private fun toggleBookmark(page: Int) {
+        // 북마크 온/오프 로직
+    }
+
+    private fun openBookmarkList() {
+        // 북마크 리스트 다이얼로그 또는 액티비티 호출
+    }
+
+    private fun promptAddPage(page: Int) {
+        // 페이지 추가 다이얼로그 로직
+    }
+
+    private fun promptDeletePage(page: Int) {
+        // 페이지 삭제 다이얼로그 로직
     }
 }
