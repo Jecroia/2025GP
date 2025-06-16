@@ -1,11 +1,9 @@
 package com.example.scoreviewer
 
+import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.RectF
 import android.graphics.pdf.PdfDocument
 import android.os.Environment
-import android.widget.ImageView
-import android.graphics.Matrix as AndroidMatrix
 import com.artifex.mupdf.fitz.ColorSpace
 import com.artifex.mupdf.fitz.Matrix
 import com.artifex.mupdf.fitz.Page
@@ -14,10 +12,10 @@ import java.io.FileOutputStream
 
 object SaveAnnotatedPDF {
 
-    fun generateSaveFileName(originalFile: File): String {
+    fun generateSaveFileName(context: Context, originalFile: File): String {
         // 1) 다운로드 폴더 가져오기
-        val downloadsDir = Environment
-            .getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val downloadsDir = context
+            .getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)!!
         if (!downloadsDir.exists()) downloadsDir.mkdirs()
 
         // 2) 파일명에서 _svN 접미사를 제거해 "루트" 이름만 뽑기
@@ -46,16 +44,19 @@ object SaveAnnotatedPDF {
     fun save(
         pdfManager: PdfManager,
         annotationView: AnnotationCanvasView,
-        outputName: String
+        outputName: String,
+        overwrite: Boolean = false
     ): File {
         // 저장 위치 준비 (공용 Download 폴더)
-        val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+        val downloadsDir = annotationView.context.getExternalFilesDir(
+            Environment.DIRECTORY_DOWNLOADS
+        )!!
         if (!downloadsDir.exists()) downloadsDir.mkdirs()
 
         var baseName = outputName
         var outFile = File(downloadsDir, "$baseName.pdf")
 
-        if (outFile.exists()) {
+        if (!overwrite && outFile.exists()) {
             // outputName이 이미 "_sv" 또는 "_svN" 으로 끝나는지 확인
             val regex = Regex("(.+)_sv(\\d*)$")
             val match = regex.matchEntire(baseName)
@@ -80,6 +81,7 @@ object SaveAnnotatedPDF {
                 }
             }
         }
+
         // 이미 남아 있던 파일 삭제
         if (outFile.exists()) outFile.delete()
 

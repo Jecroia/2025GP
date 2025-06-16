@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Bundle
+import android.os.Environment
 import android.provider.OpenableColumns
 import android.view.inputmethod.InputMethodManager
 import android.view.GestureDetector
@@ -270,6 +271,12 @@ class MainActivity : AppCompatActivity() {
     /** 이중 탭: 툴 설정 패널 토글 */
     private fun handleDoubleTapOnCanvasButton() {
         toolController.togglePanel()
+        if (canvasToolsPanel.isVisible && !isCanvasActive) {
+                isCanvasActive = true
+                annotationCanvas.setTool(toolController.getCurrentTool())
+                // 시각 피드백: 반투명 아이콘
+                btnCanvas.alpha = 0.5f
+            }
     }
 
     /** PDF 파일 선택 위한 Intent */
@@ -425,10 +432,12 @@ class MainActivity : AppCompatActivity() {
         val radioFlatten  = dialogView.findViewById<RadioButton>(R.id.radio_flattenPdf)
 
         // 저장 경로...
-        textPathView.text = "저장 경로: ..."
+        val saveDir = this.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)!!
+        textPathView.text = "저장 경로: ${saveDir.absolutePath}"
 
         // 추천 이름 세팅
         val suggestion = SaveAnnotatedPDF.generateSaveFileName(
+            this,
             File("$originalPdfBaseName.pdf")
         )
         editTitle.setText(suggestion)
@@ -455,14 +464,15 @@ class MainActivity : AppCompatActivity() {
             .setView(dialogView)
             .setNegativeButton("취소", null)
             .setPositiveButton("저장") { _, _ ->
-                val baseName = if (radioFlatten.isChecked) {
-                    // 덮어쓰기
-                    originalPdfBaseName
-                } else {
-                    // 다른 이름
-                    editTitle.text.toString().ifBlank { suggestion }
-                }
-                val saved = SaveAnnotatedPDF.save(pdfManager, annotationCanvas, baseName)
+                val overwrite = radioFlatten.isChecked
+                val baseName = if (overwrite) originalPdfBaseName
+                               else editTitle.text.toString().ifBlank { suggestion }
+                val saved = SaveAnnotatedPDF.save(
+                        pdfManager,
+                        annotationCanvas,
+                        outputName = baseName,
+                        overwrite  = overwrite
+                )
                 Toast.makeText(this, "${saved.name}에 저장했습니다.", Toast.LENGTH_SHORT).show()
                 openPdf(saved)
             }
