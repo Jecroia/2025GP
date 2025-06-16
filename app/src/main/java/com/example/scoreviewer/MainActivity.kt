@@ -1,5 +1,6 @@
 package com.example.scoreviewer
 
+import Section
 import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Bitmap
@@ -18,7 +19,6 @@ import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.RadioButton
 import android.widget.RadioGroup
-import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,7 +33,7 @@ import androidx.core.view.isVisible
 import androidx.core.content.edit
 import com.google.android.material.bottomsheet.BottomSheetDialog
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
 
     private val pdfManager = PdfManager()
     private var currentPdfUri: Uri? = null
@@ -627,42 +627,6 @@ class MainActivity : AppCompatActivity() {
         return super.dispatchTouchEvent(ev)
     }
 
-    private fun showLongPressMenu() {
-        val dialog = BottomSheetDialog(this)
-        val sheet = layoutInflater.inflate(R.layout.page_menu, null)
-        dialog.setContentView(sheet)
-
-        val btnToggle = sheet.findViewById<ImageButton>(R.id.btn_bookmark_toggle)
-        val btnList   = sheet.findViewById<ImageButton>(R.id.btn_bookmark_list)
-        val btnAdd    = sheet.findViewById<ImageButton>(R.id.btn_add_page)
-        val btnDel    = sheet.findViewById<ImageButton>(R.id.btn_delete_page)
-
-        // 현재 페이지 index
-        val currentPage = viewPager.currentItem
-
-        btnToggle.setOnClickListener {
-            toggleBookmark(currentPage)
-            dialog.dismiss()
-        }
-
-        btnList.setOnClickListener {
-            openBookmarkList()
-            dialog.dismiss()
-        }
-
-        btnAdd.setOnClickListener {
-            promptAddPage(currentPage)
-            dialog.dismiss()
-        }
-
-        btnDel.setOnClickListener {
-            promptDeletePage(currentPage)
-            dialog.dismiss()
-        }
-
-        dialog.show()
-    }
-
     private fun toggleBookmark(page: Int) {
         if (bookmarks.contains(page)) {
             bookmarks.remove(page)
@@ -679,7 +643,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun openBookmarkList() {
-        // 북마크 리스트 다이얼로그 또는 액티비티 호출
+        showBookmarkDialog()
     }
 
     private fun promptAddPage(page: Int) {
@@ -697,5 +661,39 @@ class MainActivity : AppCompatActivity() {
         else
             R.drawable.ic_star_off_24
         btn.setImageResource(iconRes)
+    }
+
+    private fun showBookmarkDialog() {
+        // PDF 이름과 페이지 개수를 기반으로 단일 구간 생성
+        val baseName = originalPdfBaseName
+        val totalPages = pdfManager.pageCount()
+        val sections = arrayListOf(
+            Section(
+                name      = baseName,
+                startPage = 0,
+                endPage   = totalPages - 1
+            )
+        )
+
+        // 북마크 이동 다이얼로그에 전달
+        val frag = BookmarkDialogFragment().apply {
+            arguments = Bundle().apply {
+                putString("pdfBaseName", baseName)
+                putParcelableArrayList("sections", sections)
+            }
+        }
+        frag.show(supportFragmentManager, "bookmark_nav")
+    }
+    override fun onNavigateToPage(page: Int) {
+        viewPager.currentItem = page
+    }
+    override fun onBookmarksChanged(newBookmarks: Set<Int>) {
+        // 1) 메모리에 담긴 bookmarks 갱신
+        bookmarks.clear()
+        bookmarks.addAll(newBookmarks)
+
+        // 2) SharedPreferences에는 이미 다이얼로그에서 반영됐으니, UI만 갱신
+        updateBookmarkIcon(viewPager.currentItem)
+        pageBar?.setBookmarks(bookmarks)
     }
 }

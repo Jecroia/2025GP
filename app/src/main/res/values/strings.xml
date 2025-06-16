@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">scoreviewer</string>
+
+    <!-- 다이얼로그 타이틀 -->
+    <string name="title_select_section">Select Section</string>
+    <string name="title_bookmarks">Bookmarks</string>
+
+    <!-- 버튼 contentDescription -->
+    <string name="desc_back">Go back to sections</string>
+    <string name="desc_close">Close dialog</string>
 </resources>

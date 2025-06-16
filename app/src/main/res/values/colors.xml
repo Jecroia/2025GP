@@ -3,4 +3,5 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <color name="bookmarkYellow">#FF0000</color>
+    <color name="selection_highlight">#FFE082</color>
 </resources>
