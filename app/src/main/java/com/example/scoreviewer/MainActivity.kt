@@ -1,13 +1,13 @@
 package com.example.scoreviewer
 
 import android.content.Intent
+import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.net.Uri
 import android.os.Bundle
 import android.os.Environment
 import android.provider.OpenableColumns
-import android.util.Log
 import android.view.inputmethod.InputMethodManager
 import android.view.GestureDetector
 import android.view.MotionEvent
@@ -40,7 +40,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var originalPdfBaseName: String
 
     private lateinit var viewPager: ViewPager2
-    private lateinit var seekBar: SeekBar
+    private lateinit var bookmarkSeekBar: BookmarkSeekBar
     private lateinit var thumbnailContainer: FrameLayout
     private var pageBar: PageBar? = null
     private var fragThumbnail: Frag_Thumbnail? = null
@@ -75,6 +75,9 @@ class MainActivity : AppCompatActivity() {
     private var currentPdfFile: File? = null
     private var currentMidiFile: File? = null
 
+    private lateinit var bookmarkPrefs: SharedPreferences
+    private val bookmarks = mutableSetOf<Int>()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -86,7 +89,7 @@ class MainActivity : AppCompatActivity() {
 
         // View 초기화
         viewPager = findViewById(R.id.viewPager)
-        seekBar = findViewById(R.id.pageSeekBar)
+        bookmarkSeekBar = findViewById(R.id.pageSeekBar)
         thumbnailContainer = findViewById(R.id.thumbnail_container)
 
         annotationCanvas = findViewById(R.id.annotationCanvas)
@@ -186,6 +189,13 @@ class MainActivity : AppCompatActivity() {
                 else
                     View.VISIBLE
         }
+        // PageBar 초기화할 때에도 커스텀 SeekBar를 넘겨줍니다
+        pageBar = PageBar(pdfManager, pdfManager.pageCount()).also {
+            it.initializeSeekBar(bookmarkSeekBar)
+            it.onPageSelected = { page ->
+                viewPager.setCurrentItem(page, true)
+            }
+        }
 
         toolController = CanvasToolController(
             annotationCanvas = annotationCanvas,
@@ -278,6 +288,22 @@ class MainActivity : AppCompatActivity() {
             val imm = getSystemService(INPUT_METHOD_SERVICE) as InputMethodManager
             imm.showSoftInput(edit, InputMethodManager.SHOW_IMPLICIT)
         }
+
+        // Long-press 메뉴 버튼
+        pageMenuPanel.findViewById<ImageButton>(R.id.btn_bookmark_toggle)
+            .setOnClickListener {
+                val page = viewPager.currentItem
+                toggleBookmark(page)
+                pageMenuPanel.visibility = View.GONE
+            }
+
+        btnPage.setOnClickListener {
+            // 메뉴가 열리기 직전에 아이콘 상태 동기화
+            updateBookmarkIcon(viewPager.currentItem)
+            pageMenuPanel.visibility = if (pageMenuPanel.isVisible) View.GONE else View.VISIBLE
+        }
+
+
         openFilePicker()
     }
 
@@ -368,7 +394,7 @@ class MainActivity : AppCompatActivity() {
         prefs.edit { putString("last_pdf", pdfFile.absolutePath) }
 
         pageBar = PageBar(pdfManager, count).also {
-            it.initializeSeekBar(seekBar)
+            it.initializeSeekBar(bookmarkSeekBar)
             it.onPageSelected = { page -> viewPager.setCurrentItem(page, true) }
             it.onThumbnailRequested = { bm, x, y -> handleThumbnailRequest(bm, x, y) }
             //seekbar false : default
@@ -379,7 +405,7 @@ class MainActivity : AppCompatActivity() {
 
         pageChangeCallback = object : ViewPager2.OnPageChangeCallback(){
             override fun onPageSelected(position: Int) {
-                seekBar.progress = position
+                bookmarkSeekBar.progress = position
                 annotationCanvas.setPage(position)
                 // 현재 페이지의 transformation matrix도 넘겨 줌
                 val rv = viewPager.getChildAt(0) as? RecyclerView
@@ -408,6 +434,19 @@ class MainActivity : AppCompatActivity() {
         } else {
             prefs.edit { remove("last_midi") }
         }
+
+        // (1) PDF 파일이 열릴 때마다 prefs 초기화
+        bookmarkPrefs = getSharedPreferences(
+            "Bookmarks_${originalPdfBaseName}", MODE_PRIVATE
+        )
+        // (2) 저장된 문자열 세트(String)에 담긴 숫자들로 변환
+        bookmarks.clear()
+        bookmarkPrefs.getStringSet("bookmarks", emptySet())!!
+            .mapNotNull { it.toIntOrNull() }
+            .forEach { bookmarks.add(it) }
+
+        // (3) SeekBar 위에 표시하기 위해 PageBar에 북마크 전달 (다음 단계 구현용)
+        pageBar?.setBookmarks(bookmarks)
     }
 
     private fun handleThumbnailRequest(bitmap: Bitmap, x: Int, y: Int) {
@@ -437,7 +476,7 @@ class MainActivity : AppCompatActivity() {
 
         if (savedPage != -1 && savedPdfPath != null && currentPdfFile?.absolutePath == savedPdfPath) {
             viewPager.setCurrentItem(savedPage, false)
-            seekBar.progress = savedPage
+            bookmarkSeekBar.progress = savedPage
         }
     }
 
@@ -590,7 +629,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun showLongPressMenu() {
         val dialog = BottomSheetDialog(this)
-        val sheet = layoutInflater.inflate(R.layout.layout_long_press_menu, null)
+        val sheet = layoutInflater.inflate(R.layout.page_menu, null)
         dialog.setContentView(sheet)
 
         val btnToggle = sheet.findViewById<ImageButton>(R.id.btn_bookmark_toggle)
@@ -625,7 +664,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun toggleBookmark(page: Int) {
-        // 북마크 온/오프 로직
+        if (bookmarks.contains(page)) {
+            bookmarks.remove(page)
+        } else {
+            bookmarks.add(page)
+        }
+        // SharedPreferences 에 저장
+        bookmarkPrefs.edit {
+            putStringSet("bookmarks", bookmarks.map { it.toString() }.toSet())
+        }
+        // 메뉴 아이콘·PageBar 에 반영
+        updateBookmarkIcon(page)
+        pageBar?.setBookmarks(bookmarks)
     }
 
     private fun openBookmarkList() {
@@ -638,5 +688,14 @@ class MainActivity : AppCompatActivity() {
 
     private fun promptDeletePage(page: Int) {
         // 페이지 삭제 다이얼로그 로직
+    }
+
+    private fun updateBookmarkIcon(page: Int) {
+        val btn = pageMenuPanel.findViewById<ImageButton>(R.id.btn_bookmark_toggle)
+        val iconRes = if (bookmarks.contains(page))
+            R.drawable.ic_star_on_24
+        else
+            R.drawable.ic_star_off_24
+        btn.setImageResource(iconRes)
     }
 }

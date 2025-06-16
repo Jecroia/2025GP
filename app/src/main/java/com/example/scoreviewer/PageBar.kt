@@ -16,7 +16,7 @@ class PageBar(
     var onThumbnailRequested: ((bitmap: Bitmap, xPos: Int, yPos: Int) -> Unit)? = null
     var onPageSelected: ((page: Int) -> Unit)? = null
 
-    private var seekBar: SeekBar? = null
+    private var seekBar: BookmarkSeekBar? = null
     private var isLongPress = false
     private var longPressRunnable: Runnable? = null
     private val longPressThreshold = 300L
@@ -33,8 +33,21 @@ class PageBar(
             return value.byteCount / 1024
         }
     }
-    fun initializeSeekBar(sb: SeekBar) {
+
+    /** 외부에서 최신 북마크 집합을 전달할 때 호출 */
+    private var bookmarks: Set<Int> = emptySet()
+    fun setBookmarks(bookmarks: Set<Int>) {
+        this.bookmarks = bookmarks
+        // SeekBar 를 다시 그려서 onDraw 혹은 커스텀 레이어에서 북마크 마커를 표시하게 함
+        seekBar?.setBookmarks(bookmarks)
+    }
+
+    fun initializeSeekBar(sb: BookmarkSeekBar) {
         seekBar = sb.apply {
+            // (1) 전체 페이지 수 설정
+            setPageCount(pageCount)
+            // (2) 기존에 저장된 북마크 표시
+            setBookmarks(bookmarks)
             max = pageCount - 1
 
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
@@ -122,7 +135,7 @@ class PageBar(
         return bmp
     }
 
-    private fun calculateThumbXFromProgress(sb: SeekBar, prog: Int): Int {
+    private fun calculateThumbXFromProgress(sb: BookmarkSeekBar, prog: Int): Int {
         val w = sb.width - sb.paddingLeft - sb.paddingRight
         return sb.paddingLeft + w * prog / sb.max
     }
