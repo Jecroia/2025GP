@@ -323,7 +323,7 @@ class MainActivity : AppCompatActivity() {
         annotationCanvas.clearAll()
         66
         val prefs = getSharedPreferences("PlaybackPrefs", MODE_PRIVATE)
-        prefs.edit().putString("last_pdf", pdfFile.absolutePath).apply()
+        prefs.edit { putString("last_pdf", pdfFile.absolutePath) }
 
         pageBar = PageBar(pdfManager, count).also {
             it.initializeSeekBar(seekBar)
@@ -421,9 +421,6 @@ class MainActivity : AppCompatActivity() {
 
     /** 저장 다이얼로그 표시 */
     private fun showSaveDialog() {
-        val file = currentPdfFile
-        if (file == null) { /* null 처리 */ }
-
         val dialogView = layoutInflater.inflate(R.layout.dialog_save_options, null)
         val labelTitle    = dialogView.findViewById<TextView>(R.id.labelTitle)
         val editTitle     = dialogView.findViewById<EditText>(R.id.editTitle)
