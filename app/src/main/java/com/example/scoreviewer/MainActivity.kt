@@ -20,6 +20,7 @@ import android.widget.RadioGroup
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
@@ -69,8 +70,6 @@ class MainActivity : AppCompatActivity() {
     private var isSeekBarActive = true
     private var currentPdfFile: File? = null
     private var currentMidiFile: File? = null
-
-    private val pickPDFFile = 1001
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -280,23 +279,31 @@ class MainActivity : AppCompatActivity() {
     }
 
     /** PDF 파일 선택 위한 Intent */
+    // 1) 액티비티 결과 런처 등록
+    private val pdfPickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            result.data?.data?.also { uri ->
+                handlePickedPdf(uri)
+            }
+        }
+    }
+
+    // 2) 파일 선택 메서드 수정
     private fun openFilePicker() {
         val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
             addCategory(Intent.CATEGORY_OPENABLE)
             type = "application/pdf"
         }
-        startActivityForResult(intent, pickPDFFile)
+        pdfPickerLauncher.launch(intent)  // ← startActivityForResult 대신 launch()
     }
 
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == pickPDFFile && resultCode == RESULT_OK) {
-            data?.data?.let { uri ->
-                currentPdfUri = uri
-                copyUriToTempFile(uri)?.let { file ->
-                    openPdf(file)
-                }
-            }
+    // 3) 기존 onActivityResult 제거 후 대체
+    private fun handlePickedPdf(uri: Uri) {
+        currentPdfUri = uri
+        copyUriToTempFile(uri)?.let { file ->
+            openPdf(file)
         }
     }
 
