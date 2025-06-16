@@ -71,7 +71,15 @@
             android:background="?attr/selectableItemBackgroundBorderless"
             android:contentDescription="저장"
             android:src="@drawable/tool_save_24" />
-
+        <ImageButton
+            android:id="@+id/btnPage"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@drawable/ic_bookmarks_24"
+            android:contentDescription="페이지 메뉴"
+            app:layout_constraintStart_toEndOf="@id/btnSave"
+            app:layout_constraintTop_toTopOf="@id/btnSave" />
 
     </androidx.appcompat.widget.Toolbar>
 
@@ -123,12 +131,22 @@
 
     <!-- 캔버스 도구 패널 -->
     <include
-        android:id            ="@+id/canvasToolsPanel"
-        layout               ="@layout/canvas_tools"
-        android:visibility   ="gone"
-        android:layout_width ="wrap_content"
+        android:id="@+id/canvasToolsPanel"
+        layout="@layout/canvas_tools"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        app:layout_constraintTop_toBottomOf="@id/toolbar"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintTop_toBottomOf="@id/toolbar" />
+
+    <include
+        android:id="@+id/pageMenuPanel"
+        layout="@layout/layout_long_press_menu"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:visibility="gone"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@id/toolbar" />
 </androidx.constraintlayout.widget.ConstraintLayout>

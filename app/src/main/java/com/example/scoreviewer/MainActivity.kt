@@ -55,7 +55,9 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnToggleSeekBar: ImageButton
     private lateinit var btnSave: ImageButton
     private lateinit var btnPlay: ImageButton
+    private lateinit var btnPage: ImageButton
 
+    private lateinit var pageMenuPanel: View
     private lateinit var btnCanvas: CanvasToggleButton
     private lateinit var canvasToolsPanel: View
     private lateinit var canvasPreviewSize: TextView
@@ -100,13 +102,35 @@ class MainActivity : AppCompatActivity() {
         btnRedo = findViewById(R.id.btnRedo)
         btnSave = findViewById(R.id.btnSave)
         btnPlay = findViewById(R.id.btnPlay)
+        btnPage = findViewById(R.id.btnPage)
 
+        pageMenuPanel = findViewById(R.id.pageMenuPanel)
         canvasPreviewSize = findViewById(R.id.canvasPreviewSize)
         canvasPreviewColor = findViewById(R.id.canvasPreviewColor)
         btnDecreaseSize = findViewById(R.id.btnDecreaseSize)
         btnIncreaseSize = findViewById(R.id.btnIncreaseSize)
         colorPicker = findViewById(R.id.colorPicker)
         canvasPreview = findViewById(R.id.CanvasPreview)
+        pageMenuPanel.findViewById<ImageButton>(R.id.btn_bookmark_toggle)
+            .setOnClickListener {
+                toggleBookmark(viewPager.currentItem)
+                pageMenuPanel.visibility = View.GONE
+            }
+        pageMenuPanel.findViewById<ImageButton>(R.id.btn_bookmark_list)
+            .setOnClickListener {
+                openBookmarkList()
+                pageMenuPanel.visibility = View.GONE
+            }
+        pageMenuPanel.findViewById<ImageButton>(R.id.btn_add_page)
+            .setOnClickListener {
+                promptAddPage(viewPager.currentItem)
+                pageMenuPanel.visibility = View.GONE
+            }
+        pageMenuPanel.findViewById<ImageButton>(R.id.btn_delete_page)
+            .setOnClickListener {
+                promptDeletePage(viewPager.currentItem)
+                pageMenuPanel.visibility = View.GONE
+            }
 
         // SeekBar 토글 버튼
         btnToggleSeekBar.setOnClickListener {
@@ -153,6 +177,14 @@ class MainActivity : AppCompatActivity() {
                 v.performClick()
             }
             true
+        }
+
+        btnPage.setOnClickListener {
+            pageMenuPanel.visibility =
+                if (pageMenuPanel.isVisible)
+                    View.GONE
+                else
+                    View.VISIBLE
         }
 
         toolController = CanvasToolController(
@@ -535,6 +567,21 @@ class MainActivity : AppCompatActivity() {
             val y = ev.rawY.toInt()
             if (!rect.contains(x, y)) {
                 canvasToolsPanel.visibility = View.GONE
+                return false
+            }
+        }
+        if (pageMenuPanel.isVisible && ev.action == MotionEvent.ACTION_DOWN) {
+            val menuRect = Rect()
+            pageMenuPanel.getGlobalVisibleRect(menuRect)
+            // 메뉴 토글 버튼도 터치 허용 영역으로 포함시키려면 아래처럼 버튼 영역도 같이 가져옵니다.
+            val btnRect = Rect()
+            btnPage.getGlobalVisibleRect(btnRect)
+
+            val x = ev.rawX.toInt()
+            val y = ev.rawY.toInt()
+            // 패널 외부, 버튼 영역 외부를 터치하면 닫기
+            if (!menuRect.contains(x, y) && !btnRect.contains(x, y)) {
+                pageMenuPanel.visibility = View.GONE
                 return false
             }
         }
