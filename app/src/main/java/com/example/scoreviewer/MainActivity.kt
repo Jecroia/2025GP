@@ -249,7 +249,7 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
                 thumbnailContainer.removeView(it)
             }
 
-            // 2) “모델 좌표(modelX, modelY)” → “캔버스 내부 픽셀 좌표”로 변환
+            // 2) "모델 좌표(modelX, modelY)" → "캔버스 내부 픽셀 좌표"로 변환
             //    (mapModelToScreen 은 AnnotationCanvasView에 미리 구현되어 있어야 합니다)
             val mappedPt = annotationCanvas.mapModelToScreen(modelX, modelY)
             val mappedX = mappedPt[0]            // 캔버스 내부 좌표의 X
@@ -297,7 +297,7 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
             val baselineOffset = -fm.ascent
             //    (fm.ascent가 음수이므로, -ascent 하면 양수 픽셀 값이 나옵니다)
 
-            // 7) LayoutParams에 “절대 위치 → thumbnailContainer 내부 좌표”를 베이스라인 기준으로 세팅
+            // 7) LayoutParams에 "절대 위치 → thumbnailContainer 내부 좌표"를 베이스라인 기준으로 세팅
             val params = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT
@@ -405,6 +405,10 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
 
     /** PDF 열어서 ViewPager에 연결 */
     private fun openPdf(pdfFile: File) {
+        // 새 PDF를 열면 이전 세션 복원 정보를 모두 초기화
+        LastPlayCache.clear()
+        getSharedPreferences("PlaybackPrefs", MODE_PRIVATE).edit().clear().apply()
+
         viewPager.offscreenPageLimit = 2
         (viewPager.getChildAt(0) as RecyclerView).setItemViewCacheSize(2)
         currentPdfFile = pdfFile

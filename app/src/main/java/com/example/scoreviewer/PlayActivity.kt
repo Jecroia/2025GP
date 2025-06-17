@@ -29,6 +29,8 @@ import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import kotlin.math.abs
+import kotlin.math.roundToInt
+import com.example.scoreviewer.LastPlayCache
 
 class PlayActivity : AppCompatActivity() {
     private val PICK_MIDI_FILE = 2001
@@ -116,6 +118,15 @@ class PlayActivity : AppCompatActivity() {
                 annotationCanvas.clearHighlight()
             }
         })
+
+        // ── 메모리 캐시가 현재 PDF와 일치하면 즉시 복원 ──
+        val cached = LastPlayCache
+        if (cached.pdfPath != null && cached.pdfPath == pdfPath && cached.midiPath == midiPath) {
+            viewPager.post {
+                viewPager.setCurrentItem(cached.page.coerceAtLeast(0), false)
+                midiPlaybackManager.seekTo(cached.millis.coerceAtLeast(0))
+            }
+        }
     }
 
     private fun initializeViews() {
@@ -465,6 +476,13 @@ class PlayActivity : AppCompatActivity() {
     }
 
     private fun savePlaybackState() {
+        // ① 메모리 캐시 저장 – 동일 프로세스 내 빠른 복원용
+        LastPlayCache.page = viewPager.currentItem
+        LastPlayCache.millis = midiPlaybackManager.getCurrentTime()
+        LastPlayCache.pdfPath = pdfPath
+        LastPlayCache.midiPath = midiPath
+        LastPlayCache.musicXmlPath = musicXmlPath
+
         playbackState.saveState(
             page = viewPager.currentItem,
             millis = midiPlaybackManager.getCurrentTime(),
