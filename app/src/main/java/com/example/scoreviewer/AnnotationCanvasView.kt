@@ -18,8 +18,10 @@ sealed class Stroke {
 }
 
 class AnnotationCanvasView @JvmOverloads constructor(
-    context: Context, attrs: AttributeSet? = null
-) : View(context, attrs) {
+    context: Context,
+    attrs: AttributeSet? = null,
+    defStyleAttr: Int = 0
+) : View(context, attrs, defStyleAttr) {
 
     private var currentPage: Int = 0
     private val pageToHistory = mutableMapOf<Int, MutableList<Stroke>>()
@@ -31,6 +33,10 @@ class AnnotationCanvasView @JvmOverloads constructor(
 
     var onTextTapListener: ((Float, Float) -> Unit)? = null
     private var currentTool: Tool? = null
+
+    private var highlightRect: RectF? = null
+    private var highlightExpireTime: Long = 0
+    private var highlightRemovalRunnable: Runnable? = null
 
     fun setPage(page: Int) {
         // 페이지 전환 시 히스토리·스택 초기화 없이 해당 페이지만 다시 그리기
@@ -187,6 +193,16 @@ class AnnotationCanvasView @JvmOverloads constructor(
                 }
             }
         }
+
+        // pageToHistory 그리기 후에 추가
+        highlightRect?.let {
+            val paint = Paint().apply {
+                color = Color.YELLOW
+                style = Paint.Style.FILL
+                alpha = 80  // 반투명
+            }
+            canvas.drawRect(it, paint)
+        }
     }
     private fun makePaintFor(tool: Tool): Paint = Paint().apply {
         style       = if (tool == Tool.TEXT) Paint.Style.FILL else Paint.Style.STROKE
@@ -232,5 +248,24 @@ class AnnotationCanvasView @JvmOverloads constructor(
         imageTransformationMatrix.set(matrix)
         imageTransformationMatrix.invert(inverseImageTransformationMatrix)
         invalidate()
+    }
+
+    fun highlight(rect: RectF?, durationMs: Int) {
+        if (rect == null) return
+        highlightRect = rect
+        highlightExpireTime = System.currentTimeMillis() + durationMs
+        invalidate()
+
+        // 이전 제거 요청이 남아 있으면 취소
+        highlightRemovalRunnable?.let { removeCallbacks(it) }
+
+        highlightRemovalRunnable = Runnable {
+            if (System.currentTimeMillis() >= highlightExpireTime) {
+                highlightRect = null
+                invalidate()
+            }
+        }
+
+        postDelayed(highlightRemovalRunnable, durationMs.toLong())
     }
 }

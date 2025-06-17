@@ -2,12 +2,16 @@
     "bpm": 230,
     "pages": {
         "1": {
+            "topMarginPercent": 12.65,
+            "bottomMarginPercent": 16.41,
             "line 1": "4마디",
             "line 2": "1마디 + 3+2/4박자 1마디",
             "line 3": "3마디",
             "line 4": "3마디"
         },
         "2": {
+            "topMarginPercent": 5.82,
+            "bottomMarginPercent": 9.68,
             "line 1": "3마디",
             "line 2": "3마디",
             "line 3": "3마디",
@@ -15,6 +19,8 @@
             "line 5": "3마디"
         },
         "3": {
+            "topMarginPercent": 5.82,
+            "bottomMarginPercent": 9.68,
             "line 1": "3마디",
             "line 2": "3마디",
             "line 3": "2마디",
@@ -22,6 +28,8 @@
             "line 5": "3마디"
         },
         "4": {
+            "topMarginPercent": 5.82,
+            "bottomMarginPercent": 9.68,
             "line 1": "3마디",
             "line 2": "3마디",
             "line 3": "3마디",
@@ -29,6 +37,8 @@
             "line 5": "3마디"
         },
         "5": {
+            "topMarginPercent": 5.82,
+            "bottomMarginPercent": 9.68,
             "line 1": "3마디",
             "line 2": "3마디",
             "line 3": "4마디",
@@ -36,6 +46,8 @@
             "line 5": "3마디"
         },
         "6": {
+            "topMarginPercent": 5.82,
+            "bottomMarginPercent": 9.68,
             "line 1": "3마디",
             "line 2": "3마디",
             "line 3": "4마디",
@@ -43,6 +55,8 @@
             "line 5": "3마디"
         },
         "7": {
+            "topMarginPercent": 5.82,
+            "bottomMarginPercent": 9.68,
             "line 1": "4마디",
             "line 2": "4마디",
             "line 3": "3마디",
@@ -50,6 +64,8 @@
             "line 5": "4마디"
         },
         "8": {
+            "topMarginPercent": 5.82,
+            "bottomMarginPercent": 9.68,
             "line 1": "4마디",
             "line 2": "2마디"
         }

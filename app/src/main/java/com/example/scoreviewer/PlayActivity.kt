@@ -25,6 +25,7 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
 import androidx.viewpager2.widget.ViewPager2
+import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import kotlin.math.abs
@@ -53,6 +54,7 @@ class PlayActivity : AppCompatActivity() {
     private var pageChangeTimes: List<Int> = emptyList()
     private var currentLines: List<MusicXmlParser.Line> = emptyList()
     private var currentLineIndex = -1
+    private var musicJsonData: JSONObject? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -84,7 +86,17 @@ class PlayActivity : AppCompatActivity() {
         if (midiPath != null) loadMidiFile()
         if (musicXmlPath != null) {
             val xmlFile = File(musicXmlPath!!)
-            pageChangeTimes = MusicXmlParser.parsePageChangeTimes(xmlFile)
+            if (xmlFile.exists() && xmlFile.canRead()) {
+                pageChangeTimes = MusicXmlParser.parsePageChangeTimes(xmlFile)
+                currentLines = MusicXmlParser.parseLines(xmlFile)
+                loadJsonForHighlight()
+                annotationCanvas.post {
+                    currentLineIndex = -1
+                    updateCurrentLine(midiPlaybackManager.getCurrentTime())
+                }
+            } else {
+                Log.w("PlayActivity", "MusicXML file not readable in onCreate; waiting for user selection")
+            }
         }
         setupControlButtons()
         setupSeekBar()
@@ -179,9 +191,11 @@ class PlayActivity : AppCompatActivity() {
         }
         if (musicXmlPath != null) {
             val xmlFile = File(musicXmlPath!!)
-            if (xmlFile.exists()) {
+            if (xmlFile.exists() && xmlFile.canRead()) {
                 pageChangeTimes = MusicXmlParser.parsePageChangeTimes(xmlFile)
                 currentLines = MusicXmlParser.parseLines(xmlFile)
+            } else {
+                Log.w("PlayActivity", "Saved MusicXML path not readable; skipping auto-parse")
             }
         }
         if (playbackState.shouldRestoreState()) {
@@ -369,20 +383,60 @@ class PlayActivity : AppCompatActivity() {
         }
     }
 
+    private fun loadJsonForHighlight() {
+        try {
+            val musicXmlFile = File(musicXmlPath ?: return)
+            var jsonText: String? = null
+
+            // 1) 같은 디렉터리의 JSON 우선 시도
+            val externalJson = File(musicXmlFile.parent, "everlasting_message.json")
+            if (externalJson.isFile) {
+                jsonText = externalJson.readText(Charsets.UTF_8)
+                Log.d("PlayActivity", "Highlight JSON loaded from external file")
+            } else {
+                // 2) assets 내 메타데이터 파일 fallback
+                try {
+                    assets.open("everlasting_message_metadata.json").use { input ->
+                        jsonText = input.bufferedReader(Charsets.UTF_8).readText()
+                        Log.d("PlayActivity", "Highlight JSON loaded from assets")
+                    }
+                } catch (ignore: Exception) {
+                    Log.w("PlayActivity", "Highlight JSON not found in assets")
+                }
+            }
+
+            if (jsonText != null) {
+                val jsonObject = JSONObject(jsonText)
+                musicJsonData = jsonObject.optJSONObject("pages")
+            } else {
+                Log.w("PlayActivity", "Highlight JSON could not be loaded")
+            }
+        } catch (e: Exception) {
+            Log.e("PlayActivity", "Error loading highlight JSON", e)
+        }
+    }
+
     private fun handleMusicXmlFileSelection(uri: Uri) {
         try {
-            val inputStream = contentResolver.openInputStream(uri)
-                ?: throw IOException("파일을 열 수 없습니다")
-            val tempXml = File.createTempFile("selected_musicxml", ".xml", cacheDir)
-            tempXml.outputStream().use { output ->
-                inputStream.copyTo(output)
+            val tempXml = File(cacheDir, "temp_musicxml.xml")
+            contentResolver.openInputStream(uri)?.use { input ->
+                tempXml.outputStream().use { output ->
+                    input.copyTo(output)
+                }
             }
             musicXmlPath = tempXml.absolutePath
             pageChangeTimes = MusicXmlParser.parsePageChangeTimes(tempXml)
             currentLines = MusicXmlParser.parseLines(tempXml)
+            loadJsonForHighlight()
+            // 뷰가 레이아웃된 이후에 하이라이트 계산을 실행해야 정확한 좌표가 나옴
+            annotationCanvas.post {
+                currentLineIndex = -1
+                updateCurrentLine(midiPlaybackManager.getCurrentTime())
+            }
             Toast.makeText(this, "MusicXML 파일이 성공적으로 로드되었습니다.", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            Toast.makeText(this, "MusicXML 파일 처리 중 오류: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "MusicXML 파일 로드 중 오류가 발생했습니다: ${e.message}", Toast.LENGTH_LONG).show()
+            Log.e("PlayActivity", "Error loading MusicXML file", e)
         }
     }
 
@@ -506,23 +560,63 @@ class PlayActivity : AppCompatActivity() {
     }
 
     private fun updateCurrentLine(currentMillis: Int) {
-        if (currentLines.isEmpty()) return
+        if (currentLines.isEmpty()) {
+            Log.i("PlayActivity", "currentLines is empty – highlight skipped")
+            return
+        }
 
-        val newLineIndex = currentLines.indexOfLast { it.startTimeMs <= currentMillis }
+        // 현재 재생 위치에 해당하는 라인 찾기
+        val newLineIndex = currentLines.indexOfFirst { currentMillis in it.startTimeMs until it.endTimeMs }
+        if (newLineIndex == -1) return
+
+        val currentLine = currentLines[newLineIndex]
+
+        // 라인 변경 시 PDF 하이라이트 갱신
         if (newLineIndex != currentLineIndex) {
             currentLineIndex = newLineIndex
-            if (currentLineIndex >= 0) {
-                val currentLine = currentLines[currentLineIndex]
-                // 현재 줄 하이라이트 처리
-                (viewPager.adapter as? PDFPagerAdapter)?.highlightLine(currentLine.pageNumber, currentLine.lineNumber)
-                
-                // 현재 연주 중인 마디 번호 표시
-                val currentMeasures = currentLine.measureNumbers
-                if (currentMeasures.isNotEmpty()) {
-                    val measureText = "마디: ${currentMeasures.first()}-${currentMeasures.last()}"
-                    timeText.text = "${timeText.text} ($measureText)"
-                }
+            (viewPager.adapter as? PDFPagerAdapter)?.highlightLine(currentLine.pageNumber, currentLine.lineNumber)
+        }
+
+        // annotationCanvas 가 아직 측정되지 않았다면 나중에 다시 시도
+        if (annotationCanvas.height == 0) {
+            annotationCanvas.postDelayed({ updateCurrentLine(currentMillis) }, 50)
+            return
+        }
+
+        // 현재 라인에서 실제 재생 중인 마디 계산
+        val currentTimeInLine = currentMillis - currentLine.startTimeMs
+        val jsonData = musicJsonData ?: return
+        val lineDesc = jsonData.optJSONObject(currentLine.pageNumber.toString())
+            ?.optString("line ${currentLine.lineNumber + 1}") ?: return
+
+        val durations = HighlightHelper.splitLineDuration(currentLine.startTimeMs, currentLine.endTimeMs, lineDesc)
+        // 누적하여 위치 찾기
+        var accum = 0
+        var measureIdxInLine = 0
+        for ((idx, d) in durations.withIndex()) {
+            if (currentTimeInLine < accum + d) {
+                measureIdxInLine = idx
+                break
             }
+            accum += d
+        }
+
+        val currentMeasure = currentLine.measureNumbers.getOrNull(measureIdxInLine) ?: return
+
+        Log.i("PlayActivity", "🎵 Trying to highlight measure $currentMeasure")
+
+        val result = HighlightHelper.getMeasureHighlight(
+            measureNumber = currentMeasure,
+            lines = currentLines,
+            pageWidthPx = annotationCanvas.width,
+            pageHeightPx = annotationCanvas.height,
+            jsonData = jsonData
+        )
+
+        if (result != null) {
+            val (rect, durationMs) = result
+            Log.i("PlayActivity", "🔔 Highlighting measure $currentMeasure for $durationMs ms")
+            annotationCanvas.highlight(rect, durationMs)
         }
     }
 }

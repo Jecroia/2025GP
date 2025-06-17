@@ -141,7 +141,8 @@ object MusicXmlParser {
         var currentRepeatCount = 1
         var currentJumpTo: Int? = null
         var currentJumpType: String? = null
-        var currentPageNumber = 0
+        var currentPageNumber = 1  // 첫 페이지를 1로 시작
+        var insideNote = false  // note 태그 내부 여부를 추적하는 변수 추가
 
         try {
             val factory = XmlPullParserFactory.newInstance()
@@ -156,6 +157,9 @@ object MusicXmlParser {
                     when (eventType) {
                         XmlPullParser.START_TAG -> {
                             when (parser.name) {
+                                "note" -> {
+                                    insideNote = true
+                                }
                                 "measure" -> {
                                     measureNumber++
                                     // 페이지 번호 파싱
@@ -215,8 +219,11 @@ object MusicXmlParser {
                                     Log.d(TAG, "Found divisions: $currentDivisions")
                                 }
                                 "duration" -> {
-                                    currentDuration = parser.nextText().toIntOrNull() ?: currentDuration
-                                    Log.d(TAG, "Found duration: $currentDuration divisions")
+                                    if (insideNote) {
+                                        val durationValue = parser.nextText().toIntOrNull() ?: 0
+                                        currentDuration += durationValue
+                                        Log.d(TAG, "Accumulated note duration: +$durationValue → $currentDuration")
+                                    }
                                 }
                                 "repeat" -> {
                                     val direction = parser.getAttributeValue(null, "direction")
@@ -259,6 +266,21 @@ object MusicXmlParser {
                                         }
                                     }
                                     Log.d(TAG, "Found D.S. to measure $currentJumpTo")
+                                }
+                                "print" -> {
+                                    // 새 페이지 시작 여부 확인
+                                    val newPage = parser.getAttributeValue(null, "new-page")
+                                    if (newPage == "yes") {
+                                        currentPageNumber += 1
+                                        Log.d(TAG, "New page detected via <print>: page=$currentPageNumber")
+                                    }
+                                }
+                            }
+                        }
+                        XmlPullParser.END_TAG -> {
+                            when (parser.name) {
+                                "note" -> {
+                                    insideNote = false
                                 }
                             }
                         }
