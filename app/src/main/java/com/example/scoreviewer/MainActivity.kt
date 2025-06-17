@@ -13,7 +13,9 @@ import android.view.inputmethod.InputMethodManager
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
+import android.view.MenuItem
 import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
@@ -25,6 +27,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.larswerkman.holocolorpicker.ColorPicker
@@ -32,13 +35,13 @@ import java.io.File
 import androidx.core.view.isVisible
 import androidx.core.content.edit
 import com.google.android.material.bottomsheet.BottomSheetDialog
+import android.os.Environment
 
 class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
 
     private val pdfManager = PdfManager()
     private var currentPdfUri: Uri? = null
     private lateinit var originalPdfBaseName: String
-
     private lateinit var viewPager: ViewPager2
     private lateinit var bookmarkSeekBar: BookmarkSeekBar
     private lateinit var thumbnailContainer: FrameLayout
@@ -74,6 +77,7 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
     private var isSeekBarActive = true
     private var currentPdfFile: File? = null
     private var currentMidiFile: File? = null
+    private var currentMusicXmlFile: File? = null
 
     private lateinit var bookmarkPrefs: SharedPreferences
     private val bookmarks = mutableSetOf<Int>()
@@ -82,7 +86,21 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        // 툴바 설정
+        // 앱 최초 실행 시 모든 설정 초기화
+        val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val isFirstRun = prefs.getBoolean("is_first_run", true)
+        if (isFirstRun) {
+            getSharedPreferences("PlaybackPrefs", MODE_PRIVATE).edit().clear().apply()
+            prefs.edit().apply {
+                remove("sync_offset_ms")
+                remove("start_delay_sec")
+                putBoolean("is_first_run", false)
+                apply()
+            }
+            viewPager = findViewById(R.id.viewPager)
+            viewPager.setCurrentItem(0, false)
+        }
+
         val toolbar: Toolbar = findViewById(R.id.toolbar)
         setSupportActionBar(toolbar)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
@@ -91,6 +109,13 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
         viewPager = findViewById(R.id.viewPager)
         bookmarkSeekBar = findViewById(R.id.pageSeekBar)
         thumbnailContainer = findViewById(R.id.thumbnail_container)
+
+        // 최초 실행 시 ViewPager 페이지 초기화
+        val sharedPrefs = PreferenceManager.getDefaultSharedPreferences(this)
+        val firstRun = sharedPrefs.getBoolean("is_first_run", true)
+        if (firstRun) {
+            viewPager.setCurrentItem(0, false)
+        }
 
         annotationCanvas = findViewById(R.id.annotationCanvas)
         btnToggleSeekBar = findViewById(R.id.btnToggleSeekBar)
@@ -146,15 +171,18 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
             btnToggleSeekBar.setImageResource(icon)
         }
 
-        // MIDI 재생 버튼
+        btnPlay = findViewById(R.id.btnPlay)
+
+        // 최초 실행 여부를 onCreate에서 미리 읽어둠
+
         btnPlay.setOnClickListener {
             currentPdfFile?.let {
                 val intent = Intent(this, PlayActivity::class.java).apply {
                     putExtra("pdfPath", it.absolutePath)
-                    putExtra("currentPage", viewPager.currentItem)
-                    currentMidiFile?.let { midi ->
-                        putExtra("midiPath", midi.absolutePath)
-                    }
+                    putExtra("midiPath", currentMidiFile?.absolutePath)
+                    putExtra("musicXmlPath", currentMusicXmlFile?.absolutePath)
+                    putExtra("resetPrefs", isFirstRun)
+                    putExtra("autoMatchFailed", (currentMidiFile == null && currentMusicXmlFile == null))
                 }
                 startActivity(intent)
             }
@@ -427,12 +455,22 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
             ?.substringBeforeLast('.')
             ?: pdfFile.nameWithoutExtension
 
+        // 자동매칭: 원본 파일명 기반으로 외부 저장소에서 MIDI/MusicXML 검색
         currentMidiFile = null
-        val midiFile = File(pdfFile.parentFile, pdfFile.nameWithoutExtension + ".mid")
-        if (midiFile.exists()) {
-            currentMidiFile = midiFile
-        } else {
-            prefs.edit { remove("last_midi") }
+        currentMusicXmlFile = null
+        val midiName = originalPdfBaseName + ".mid"
+        val musicXmlName = originalPdfBaseName + ".xml"
+        // 1. PDF와 같은 폴더(가능하다면)에서 먼저 검색
+        val midiFromCache = File(pdfFile.parentFile, midiName)
+        val xmlFromCache = File(pdfFile.parentFile, musicXmlName)
+        if (midiFromCache.exists()) currentMidiFile = midiFromCache
+        if (xmlFromCache.exists()) currentMusicXmlFile = xmlFromCache
+        // 2. 그래도 없으면 Downloads, Documents 등에서 검색
+        if (currentMidiFile == null) {
+            currentMidiFile = findFileInCommonDirs(midiName)
+        }
+        if (currentMusicXmlFile == null) {
+            currentMusicXmlFile = findFileInCommonDirs(musicXmlName)
         }
 
         // (1) PDF 파일이 열릴 때마다 prefs 초기화
@@ -444,6 +482,8 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
         bookmarkPrefs.getStringSet("bookmarks", emptySet())!!
             .mapNotNull { it.toIntOrNull() }
             .forEach { bookmarks.add(it) }
+
+
 
         // (3) SeekBar 위에 표시하기 위해 PageBar에 북마크 전달 (다음 단계 구현용)
         pageBar?.setBookmarks(bookmarks)
@@ -696,4 +736,26 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
         updateBookmarkIcon(viewPager.currentItem)
         pageBar?.setBookmarks(bookmarks)
     }
+    private fun findFileInCommonDirs(fileName: String): File? {
+        val dirs = listOfNotNull(
+            getExternalFilesDir(null),
+            getExternalFilesDir(""),
+            getExternalFilesDir("Documents"),
+            getExternalFilesDir("Download"),
+            getExternalFilesDir("Music"),
+            getExternalFilesDir("Movies"),
+            getExternalFilesDir("Pictures"),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MUSIC),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES),
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES)
+        )
+        for (dir in dirs) {
+            val file = File(dir, fileName)
+            if (file.exists()) return file
+        }
+        return null
+    }
+
 }

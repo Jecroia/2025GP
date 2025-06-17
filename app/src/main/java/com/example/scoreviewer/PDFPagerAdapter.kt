@@ -2,6 +2,9 @@ package com.example.scoreviewer
 
 import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.view.ViewGroup
 import android.widget.ImageView
 import androidx.collection.LruCache
@@ -33,7 +36,17 @@ class PDFPagerAdapter(
     inner class PageViewHolder(val imageView: ImageView) : RecyclerView.ViewHolder(imageView) {
         var attacher: PhotoViewAttacher? = null
         var renderJob: Job? = null
+        var originalBitmap: Bitmap? = null
+        var highlightedBitmap: Bitmap? = null
+        var currentLine = -1
     }
+    
+    private val linePaint = Paint().apply {
+        color = Color.YELLOW
+        alpha = 100
+        style = Paint.Style.FILL
+    }
+    
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PageViewHolder {
         val imageView = ImageView(parent.context).apply {
@@ -47,29 +60,39 @@ class PDFPagerAdapter(
     }
 
     override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
-        // 이전 attacher 정리
+        // ───────── 0. 이전 작업 정리 ─────────
         holder.renderJob?.cancel()
-        holder.attacher = null
-        attachPhotoView(holder, position)
+        holder.attacher = null   // PhotoViewAttacher 해제
 
-        // 1) 캐시가 있으면 바로 표시
+        // ───────── 1. 캐시 비트맵 있으면 즉시 사용 ─────────
         bitmapCache.get(position)?.let { bmp ->
-            if (!bmp.isRecycled) {
+           if (!bmp.isRecycled) {
+                holder.originalBitmap    = bmp                    // ⭐ origin 브랜치 기능 살림
+                holder.highlightedBitmap = bmp.copy(
+                    bmp.config ?: Bitmap.Config.ARGB_8888, true
+                )
                 holder.imageView.setImageBitmap(bmp)
-                attachPhotoView(holder, position)
-                return
+                attachPhotoView(holder, position)                 // attacher 재생성
+                return                                            // 더 이상 작업 불필요
             }
         }
 
-        // 2) 로딩 플레이스홀더
-        holder.imageView.setImageDrawable(null)
-        // 3) IO 스레드에서 렌더링
-        holder.renderJob = CoroutineScope(Dispatchers.IO).launch {
-            val bitmap = renderPage(position)
-            bitmapCache.put(position, bitmap)
-            withContext(Dispatchers.Main) {
-                holder.imageView.setImageBitmap(bitmap)
-                holder.attacher?.update()
+    // 플레이스홀더 & 기본 attacher 
+    holder.imageView.setImageDrawable(null)
+    attachPhotoView(holder, position)                         // 스케일 1.0 상태의 매트릭스 반영
+
+    // 코루틴으로 페이지 렌더링
+    holder.renderJob = CoroutineScope(Dispatchers.IO).launch {
+        val bmp = renderPage(position)                        // pixmap → Bitmap 변환 포함
+        val copyForHL = bmp.copy(bmp.config ?: Bitmap.Config.ARGB_8888, true)
+
+        bitmapCache.put(position, bmp)                        // 캐시 저장
+
+        withContext(Dispatchers.Main) {
+            holder.originalBitmap    = bmp
+            holder.highlightedBitmap = copyForHL
+            holder.imageView.setImageBitmap(bmp)
+            holder.attacher?.update()                         // 스케일/팬 상태 유지
             }
         }
     }
@@ -131,5 +154,27 @@ class PDFPagerAdapter(
             }
         }
         holder.imageView.setImageDrawable(null)
+        
+    fun highlightLine(pageNumber: Int, lineNumber: Int) {
+        val rv = viewPager.getChildAt(0) as? RecyclerView
+        val holder = rv?.findViewHolderForAdapterPosition(pageNumber) as? PageViewHolder
+        holder?.let {
+            if (it.currentLine != lineNumber) {
+                it.currentLine = lineNumber
+                it.originalBitmap?.let { original ->
+                    val highlighted = original.copy(original.config ?: Bitmap.Config.ARGB_8888, true)
+                    val canvas = Canvas(highlighted)
+                    
+                    // 페이지를 4개의 줄로 나누어 하이라이트
+                    val lineHeight = original.height / 4
+                    val y = lineNumber * lineHeight
+                    
+                    canvas.drawRect(0f, y.toFloat(), original.width.toFloat(), (y + lineHeight).toFloat(), linePaint)
+                    
+                    it.highlightedBitmap = highlighted
+                    it.imageView.setImageBitmap(highlighted)
+                }
+            }
+        }
     }
 }

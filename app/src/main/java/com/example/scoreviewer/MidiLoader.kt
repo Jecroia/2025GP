@@ -1,5 +1,11 @@
 package com.example.scoreviewer
 
+import android.media.midi.MidiDevice
+import android.media.midi.MidiDeviceInfo
+import android.media.midi.MidiInputPort
+import android.media.midi.MidiManager
+import android.media.midi.MidiOutputPort
+import android.media.midi.MidiReceiver
 import android.util.Log
 import java.io.File
 import java.io.FileInputStream
@@ -106,5 +112,40 @@ object MidiLoader {
 
     private fun ticksToMillis(ticks: Long, tempo: Int, division: Int): Long {
         return (ticks * tempo / division) / 1000
+    }
+
+    // MIDI 파일을 바이트 배열로 읽어오는 함수
+    fun getMidiFileBytes(file: File): ByteArray {
+        return file.readBytes()
+    }
+
+    // MIDI 파일의 헤더 정보를 반환하는 함수
+    data class MidiHeader(
+        val format: Int,
+        val numTracks: Int,
+        val division: Int,
+        val tickLength: Long = 500,  // 기본값: 500 ticks per quarter note
+        val microsecondLength: Long = 500000  // 기본값: 500,000 microseconds per quarter note (120 BPM)
+    )
+
+    fun getMidiHeader(file: File): MidiHeader? {
+        FileInputStream(file).use { fis ->
+            val fc = fis.channel
+            val buffer = fc.map(FileChannel.MapMode.READ_ONLY, 0, 14) // 헤더는 14바이트
+            buffer.order(ByteOrder.BIG_ENDIAN)
+
+            if (buffer.int != 0x4D546864) return null // "MThd"
+            val headerLength = buffer.int
+            val format = buffer.short.toInt()
+            val numTracks = buffer.short.toInt()
+            val division = buffer.short.toInt()
+
+            // division 값이 음수인 경우는 SMPTE 타임코드를 사용하는 경우
+            // 양수인 경우는 ticks per quarter note를 나타냄
+            val tickLength = if (division > 0) division.toLong() else 500L
+            val microsecondLength = 500000L // 기본 템포 (120 BPM)
+
+            return MidiHeader(format, numTracks, division, tickLength, microsecondLength)
+        }
     }
 }
