@@ -3,6 +3,8 @@ package com.example.scoreviewer
 import android.graphics.RectF
 import android.util.Log
 import org.json.JSONObject
+import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 object HighlightHelper {
@@ -57,29 +59,33 @@ object HighlightHelper {
         lineIndex: Int,
         jsonData: JSONObject
     ): Pair<Float, Float>? {
-        Log.i("HighlightHelper", "🔍 Entered calculateHighlightY - page=$pageNumber, line=$lineIndex")
         val page = jsonData.optJSONObject(pageNumber.toString()) ?: return null
+
         val topPercent = page.optDouble("topMarginPercent", 0.0)
         val bottomPercent = page.optDouble("bottomMarginPercent", 0.0)
 
-        // 총 줄 수 계산: lineCount 키가 있으면 우선 사용, 없으면 "line" 키 개수로 계산
-        val lineCountFromJson = page.optInt("lineCount", -1)
-
-        val lineKeys = page.keys().asSequence()
-            .filter { it.startsWith("line") }
-            .sortedBy { it.removePrefix("line ").toIntOrNull() ?: Int.MAX_VALUE }
-            .toList()
-        val totalLines = if (lineCountFromJson > 0) lineCountFromJson else lineKeys.size
-
-        Log.i("HighlightHelper",
-            "page=$pageNumber top=$topPercent bottom=$bottomPercent lines=$totalLines")
+        // lineCount 우선, 없으면 "line" 키 수
+        val totalLines = page.optInt("lineCount", -1).takeIf { it > 0 }
+            ?: page.keys().asSequence().count { it.startsWith("line") }
 
         if (lineIndex >= totalLines || totalLines == 0) return null
-        Log.d("HighlightHelper", "Page $pageNumber: top=$topPercent%, bottom=$bottomPercent%, totalLines=$totalLines, lineIndex=$lineIndex")
-        val effectiveHeight = 1.0 - (topPercent + bottomPercent) / 100.0
-        val lineHeight = effectiveHeight / totalLines
-        val startY = ((topPercent / 100.0) + lineHeight * lineIndex) * pageHeightPx
-        val endY = startY + (lineHeight * pageHeightPx)
+
+        // ① 실제 악보 영역 높이(마진 제외)
+        val effectiveHeightPx = pageHeightPx * (1.0 - (topPercent + bottomPercent) / 100.0)
+        // ② 각 라인 높이(px)
+        val lineHeightPx = effectiveHeightPx / totalLines
+
+        // ③ 시작/끝 좌표를 각각 독립적으로 계산 – 이중 합산 방지
+        val topMarginPx = topPercent / 100.0 * pageHeightPx
+
+        val startY = topMarginPx + lineIndex * lineHeightPx
+        val endY = topMarginPx + (lineIndex + 1) * lineHeightPx
+
+        Log.d(
+            "HighlightHelper",
+            "calculateHighlightY page=$pageNumber top=$topPercent bottom=$bottomPercent totalLines=$totalLines lineIndex=$lineIndex startY=$startY endY=$endY"
+        )
+
         return Pair(startY.toFloat(), endY.toFloat())
     }
 

@@ -3,6 +3,7 @@ package com.example.scoreviewer
 import android.content.Context
 import android.graphics.*
 import android.util.AttributeSet
+import android.util.Log
 import android.view.MotionEvent
 import android.view.View
 import kotlin.math.hypot
@@ -45,6 +46,15 @@ class AnnotationCanvasView @JvmOverloads constructor(
     private val smoothPath = Path()
     private val transformedSmoothPath = Path()
 
+    /** 현재 페이지의 비트맵을 제공하는 콜백 (PDFPagerAdapter에서 주입) */
+    private var bitmapProvider: ((Int) -> Bitmap?)? = null
+
+    fun setBitmapProvider(provider: (Int) -> Bitmap?) {
+        bitmapProvider = provider
+    }
+
+    private var lastBitmapHeight = 0
+
     /** 외부에서 color를 바꿀 때 호출 (CanvasToolController에서) */
     fun setCustomColor(color: Int) {
         customColor = color
@@ -55,7 +65,8 @@ class AnnotationCanvasView @JvmOverloads constructor(
         customSize = size
     }
 
-    private var highlightRect: RectF? = null
+    /** 페이지 좌표계(원본 PDF) 기준 하이라이트 사각형 */
+    private var highlightRectPage: RectF? = null
     private var highlightExpireTime: Long = 0
     private var highlightRemovalRunnable: Runnable? = null
 
@@ -161,7 +172,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
                         }
                         globalActionStack.add(Triple(currentPage, newStroke, ActionType.ADD))
 
-                        // 2) “이전 터치 위치”를 현재 위치로 초기화
+                        // 2) "이전 터치 위치"를 현재 위치로 초기화
                         lastTouchX = modelX
                         lastTouchY = modelY
                         // ◀───────────────────────────────────────────────────◀
@@ -255,6 +266,17 @@ class AnnotationCanvasView @JvmOverloads constructor(
         super.onDraw(canvas)
         val currentScale = getCurrentScale()
 
+        // ───────── PDF 비트맵 높이 로그 출력 ─────────
+        val bmp = bitmapProvider?.invoke(currentPage)
+        if (bmp != null) {
+            if (bmp.height != lastBitmapHeight) {
+                lastBitmapHeight = bmp.height
+                Log.d("HighlightDebug", "page=$currentPage bitmapSize=${bmp.width}x${bmp.height} canvasSize=${width}x${height}")
+            }
+        } else {
+            Log.d("HighlightDebug", "page=$currentPage bitmapSize=null (awaiting render)")
+        }
+
         pageToHistory[currentPage]?.forEach { stroke ->
             when (stroke) {
                 is Stroke.PathStroke -> {
@@ -286,7 +308,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
                             }
                         }
 
-                        // 2) “Path.transform(...)” 을 호출해서 화면 좌표로 변환
+                        // 2) "Path.transform(...)" 을 호출해서 화면 좌표로 변환
                         transformedSmoothPath.reset()
                         smoothPath.transform(imageTransformationMatrix, transformedSmoothPath)
 
@@ -317,14 +339,18 @@ class AnnotationCanvasView @JvmOverloads constructor(
             }
         }
 
-        // pageToHistory 그리기 후에 추가
-        highlightRect?.let {
+        // pageToHistory 그리기 후에 추가 (하이라이트)
+        highlightRectPage?.let { pageRect ->
+            val pts = floatArrayOf(pageRect.left, pageRect.top, pageRect.right, pageRect.bottom)
+            imageTransformationMatrix.mapPoints(pts)
+            val screenRect = RectF(pts[0], pts[1], pts[2], pts[3])
+
             val paint = Paint().apply {
                 color = Color.YELLOW
                 style = Paint.Style.FILL
-                alpha = 80  // 반투명
+                alpha = 80
             }
-            canvas.drawRect(it, paint)
+            canvas.drawRect(screenRect, paint)
         }
     }
 
@@ -420,7 +446,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
             return existingList
         }
 
-        // LRU 기준으로 “가장 오래된 페이지”가 있으면 제거
+        // LRU 기준으로 "가장 오래된 페이지"가 있으면 제거
         if (pageToHistory.size >= MAX_PAGES_IN_MEMORY) {
             val oldestKey = pageToHistory.keys.first()
             pageToHistory.remove(oldestKey)
@@ -457,7 +483,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
     }
     fun highlight(rect: RectF?, durationMs: Int) {
         if (rect == null) return
-        highlightRect = rect
+        highlightRectPage = RectF(rect) // 사본 저장
         highlightExpireTime = System.currentTimeMillis() + durationMs
         invalidate()
 
@@ -466,10 +492,17 @@ class AnnotationCanvasView @JvmOverloads constructor(
 
         highlightRemovalRunnable = Runnable {
             if (System.currentTimeMillis() >= highlightExpireTime) {
-                highlightRect = null
+                highlightRectPage = null
                 invalidate()
             }
         }
         postDelayed(highlightRemovalRunnable, durationMs.toLong())
+    }
+
+    fun clearHighlight() {
+        highlightRemovalRunnable?.let { removeCallbacks(it) }
+        highlightRemovalRunnable = null
+        highlightRectPage = null
+        invalidate()
     }
 }

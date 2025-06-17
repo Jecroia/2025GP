@@ -18,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.example.scoreviewer.MuPdfDispatcher
 
 class PDFPagerAdapter(
     private val pdfManager: PdfManager,
@@ -32,6 +33,13 @@ class PDFPagerAdapter(
         override fun sizeOf(key: Int, value: Bitmap): Int =
             value.byteCount / 1024
     }
+
+    /** 페이지별 (width,height) 픽셀 정보를 저장해 다른 컴포넌트에서 접근 가능하도록 유지 */
+    private val pageSizeMap = mutableMapOf<Int, Pair<Int, Int>>()
+
+    fun getPageSize(index: Int): Pair<Int, Int>? = pageSizeMap[index]
+
+    fun getBitmap(index: Int): Bitmap? = bitmapCache.get(index)
 
     inner class PageViewHolder(val imageView: ImageView) : RecyclerView.ViewHolder(imageView) {
         var attacher: PhotoViewAttacher? = null
@@ -73,6 +81,7 @@ class PDFPagerAdapter(
                 )
                 holder.imageView.setImageBitmap(bmp)
                 attachPhotoView(holder, position)                 // attacher 재생성
+                pageSizeMap[position] = Pair(bmp.width, bmp.height)
                 return                                            // 더 이상 작업 불필요
             }
         }
@@ -98,31 +107,35 @@ class PDFPagerAdapter(
     }
 
     /** MuPDF → Android Bitmap 변환 로직 */
-    private fun renderPage(idx: Int): Bitmap {
-        val total = pdfManager.pageCount()
-        if (idx < 0 || idx >= total) {
-            return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+    private suspend fun renderPage(idx: Int): Bitmap {
+        return withContext(MuPdfDispatcher.dispatcher) {
+            val total = pdfManager.pageCount()
+            if (idx < 0 || idx >= total) {
+                return@withContext Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
+            }
+            val page = pdfManager.loadPage(idx)
+            val pix = page.toPixmap(Matrix.Scale(1.0f), ColorSpace.DeviceRGB, true, true)
+            val raw = pix.pixels
+
+            // ABGR → ARGB 채널 스왑
+            for (i in raw.indices) {
+                val px = raw[i]
+                val a = (px ushr 24) and 0xFF
+                val b = (px ushr 16) and 0xFF
+                val g = (px ushr 8) and 0xFF
+                val r = px and 0xFF
+                raw[i] = (a shl 24) or (r shl 16) or (g shl 8) or b
+            }
+
+            val bitmap = Bitmap.createBitmap(pix.width, pix.height, Bitmap.Config.ARGB_8888)
+            bitmap.setPixels(raw, 0, pix.width, 0, 0, pix.width, pix.height)
+
+            pix.destroy()
+            page.destroy()
+            // 페이지 크기 캐시
+            pageSizeMap[idx] = Pair(bitmap.width, bitmap.height)
+            bitmap
         }
-        val page = pdfManager.loadPage(idx)
-        val pix = page.toPixmap(Matrix.Scale(1.0f), ColorSpace.DeviceRGB, true, true)
-        val raw = pix.pixels
-
-        // ABGR → ARGB 채널 스왑
-        for (i in raw.indices) {
-            val px = raw[i]
-            val a = (px ushr 24) and 0xFF
-            val b = (px ushr 16) and 0xFF
-            val g = (px ushr 8) and 0xFF
-            val r = px and 0xFF
-            raw[i] = (a shl 24) or (r shl 16) or (g shl 8) or b
-        }
-
-        val bitmap = Bitmap.createBitmap(pix.width, pix.height, Bitmap.Config.ARGB_8888)
-        bitmap.setPixels(raw, 0, pix.width, 0, 0, pix.width, pix.height)
-
-        pix.destroy()
-        page.destroy()
-        return bitmap
     }
 
     /** PhotoViewAttacher 연결 및 캔버스 매트릭스 동기화 */

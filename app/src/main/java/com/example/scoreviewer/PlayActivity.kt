@@ -108,6 +108,14 @@ class PlayActivity : AppCompatActivity() {
         findViewById<ImageButton>(R.id.btnSelectMusicXml)?.setOnClickListener {
             openMusicXmlFilePicker()
         }
+
+        // 페이지가 변경될 때 하이라이트 클리어
+        viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) {
+                super.onPageSelected(position)
+                annotationCanvas.clearHighlight()
+            }
+        })
     }
 
     private fun initializeViews() {
@@ -206,9 +214,13 @@ class PlayActivity : AppCompatActivity() {
     private fun loadPdfFile() {
         pdfManager.open(pdfPath!!)
         pageCount = pdfManager.pageCount()
-        viewPager.adapter = PDFPagerAdapter(
+        val adapter = PDFPagerAdapter(
             pdfManager, pageCount, annotationCanvas, viewPager
         )
+        viewPager.adapter = adapter
+
+        // AnnotationCanvas 가 현재 페이지 비트맵 크기에 접근할 수 있도록 provider 주입
+        annotationCanvas.setBitmapProvider { idx -> adapter.getBitmap(idx) }
     }
 
     private fun loadMidiFile() {
@@ -574,7 +586,7 @@ class PlayActivity : AppCompatActivity() {
         // 라인 변경 시 PDF 하이라이트 갱신
         if (newLineIndex != currentLineIndex) {
             currentLineIndex = newLineIndex
-            (viewPager.adapter as? PDFPagerAdapter)?.highlightLine(currentLine.pageNumber, currentLine.lineNumber)
+            // 줄 전체 하이라이트 대신 마디 하이라이트만 표시하므로 PDFPagerAdapter의 line highlight는 제거
         }
 
         // annotationCanvas 가 아직 측정되지 않았다면 나중에 다시 시도
@@ -605,11 +617,33 @@ class PlayActivity : AppCompatActivity() {
 
         Log.i("PlayActivity", "🎵 Trying to highlight measure $currentMeasure")
 
+        // PDF 원본 좌표계를 사용해야 AnnotationCanvas 매트릭스와 일치한다.
+        val adapter = viewPager.adapter as? PDFPagerAdapter
+        val adapterPageIndex = currentLine.pageNumber - 1
+        val pageSize = adapter?.getPageSize(adapterPageIndex)
+
+        if (pageSize == null) {
+            // 페이지가 아직 렌더되지 않아 사이즈 정보가 없음 → 조금 뒤에 다시 시도
+            annotationCanvas.postDelayed({ updateCurrentLine(currentMillis) }, 40)
+            Log.d(
+                "HighlightDebug",
+                "page=${currentLine.pageNumber}[idx=$adapterPageIndex] bitmapSize=null (retry scheduled)"
+            )
+            return
+        }
+
+        val (pageWidthPx, pageHeightPx) = pageSize
+
+        Log.d(
+            "HighlightDebug",
+            "page=${currentLine.pageNumber}[idx=$adapterPageIndex] bitmapSize=${pageSize} canvasSize=${annotationCanvas.width}x${annotationCanvas.height}"
+        )
+
         val result = HighlightHelper.getMeasureHighlight(
             measureNumber = currentMeasure,
             lines = currentLines,
-            pageWidthPx = annotationCanvas.width,
-            pageHeightPx = annotationCanvas.height,
+            pageWidthPx = pageWidthPx,
+            pageHeightPx = pageHeightPx,
             jsonData = jsonData
         )
 
