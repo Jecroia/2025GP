@@ -67,7 +67,7 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
     private lateinit var toolController: CanvasToolController
     private lateinit var colorPicker: ColorPicker
     private lateinit var canvasPreview: CanvasPreview
-    private lateinit var pageChangeCallback: ViewPager2.OnPageChangeCallback
+    private var pageChangeCallback: ViewPager2.OnPageChangeCallback? = null
 
     private var isCanvasActive = false
     private var isSeekBarActive = true
@@ -405,7 +405,16 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
 
     /** PDF 열어서 ViewPager에 연결 */
     private fun openPdf(pdfFile: File) {
-        viewPager.offscreenPageLimit = 2
+        (viewPager.adapter as? PDFPagerAdapter)?.releaseAll()
+        viewPager.adapter = null
+
+        pageChangeCallback?.let { viewPager.unregisterOnPageChangeCallback(it) }
+
+        pdfManager.close()  // muPDF 네이티브 리소스 해제
+        annotationCanvas.clearAll()
+
+
+        viewPager.offscreenPageLimit = 1
         (viewPager.getChildAt(0) as RecyclerView).setItemViewCacheSize(2)
         currentPdfFile = pdfFile
         pdfManager.open(pdfFile.absolutePath)
@@ -413,7 +422,6 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
 
         viewPager.adapter = PDFPagerAdapter(pdfManager, count, annotationCanvas, viewPager)
         annotationCanvas.clearAll()
-        66
         val prefs = getSharedPreferences("PlaybackPrefs", MODE_PRIVATE)
         prefs.edit { putString("last_pdf", pdfFile.absolutePath) }
 
@@ -442,7 +450,7 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
             }
         }
 
-        viewPager.registerOnPageChangeCallback(pageChangeCallback)
+        viewPager.registerOnPageChangeCallback(pageChangeCallback!!)
         annotationCanvas.setPage(viewPager.currentItem)
 
         // 항상 열 때마다 원본 베이스네임 갱신
@@ -523,7 +531,7 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
 
     override fun onDestroy() {
         super.onDestroy()
-        viewPager.unregisterOnPageChangeCallback(pageChangeCallback)
+        viewPager.unregisterOnPageChangeCallback(pageChangeCallback!!)
         pdfManager.close()
     }
 
@@ -580,18 +588,27 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
             .setPositiveButton("저장") { _, _ ->
                 val overwrite = radioFlatten.isChecked
                 val baseName = if (overwrite) originalPdfBaseName
-                               else editTitle.text.toString().ifBlank { suggestion }
+                else editTitle.text.toString().ifBlank { suggestion }
+
+                // 안전하게: null 반환 체크!
                 val saved = SaveAnnotatedPDF.save(
-                        pdfManager,
-                        annotationCanvas,
-                        outputName = baseName,
-                        overwrite  = overwrite
+                    pdfManager,
+                    annotationCanvas,
+                    outputName = baseName,
+                    overwrite  = overwrite
                 )
+
+                if (saved == null) {
+                    Toast.makeText(this, "저장 중 오류가 발생했습니다.", Toast.LENGTH_LONG).show()
+                    return@setPositiveButton
+                }
+
                 Toast.makeText(this, "${saved.name}에 저장했습니다.", Toast.LENGTH_SHORT).show()
                 openPdf(saved)
             }
             .show()
     }
+
 
 
 
@@ -752,6 +769,25 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
             if (file.exists()) return file
         }
         return null
+    }
+
+    private fun closeCurrentPdf() {
+        // 1. ViewPager의 Adapter를 null로 해제 (모든 ViewHolder와 캐시 해제)
+        viewPager.adapter = null
+
+        // 2. PDFPagerAdapter에 releaseAll() 호출 (비트맵, 렌더링 작업 해제)
+        (pdfPagerAdapter as? PDFPagerAdapter)?.releaseAll()
+        pdfPagerAdapter = null
+
+        // 3. PageBar 캐시도 해제
+        pageBar?.releaseAll()
+        pageBar = null
+
+        // 4. AnnotationCanvasView 등 기타 리소스 해제
+        annotationCanvas.clearAll()
+
+        // 5. PdfManager 내 doc/page 등 해제
+        pdfManager.close()
     }
 
 }

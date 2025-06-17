@@ -109,9 +109,19 @@ class PageBar(
         pendingThumbnailPage = pageIndex
 
         handler.postDelayed({
+            // 1. PDFManager가 닫혀있으면 아무것도 하지 않고 return
+            if (pdfManager.isClosed) return@postDelayed
+
+            // 2. 이미 다른 페이지 썸네일 요청이 들어왔으면 무시
             if (pendingThumbnailPage != pageIndex) return@postDelayed
+
+            // 3. 썸네일 생성 (실패하면 null)
             val rendered = renderAndCache(pageIndex)
-            showThumbnail(rendered, pageIndex)
+
+            // 4. 썸네일 생성에 성공한 경우에만 표시
+            if (rendered != null && !pdfManager.isClosed) {
+                showThumbnail(rendered, pageIndex)
+            }
         }, 50)
     }
 
@@ -124,15 +134,23 @@ class PageBar(
         }
     }
 
-    private fun renderAndCache(idx: Int): Bitmap {
-        val page = pdfManager.loadPage(idx)
-        val pix = page.toPixmap(Matrix.Scale(1.0f), ColorSpace.DeviceRGB, true, true)
-        val bmp = Bitmap.createBitmap(pix.width, pix.height, Bitmap.Config.ARGB_8888)
-        bmp.setPixels(pix.pixels, 0, pix.width, 0, 0, pix.width, pix.height)
-        pix.destroy()
-        page.destroy()
-        thumbnailCache.put(idx, bmp)
-        return bmp
+    private fun renderAndCache(idx: Int): Bitmap? {
+        // 1. PDFManager가 닫혔거나, 페이지가 없으면 null 반환
+        val page = pdfManager.loadPage(idx) ?: return null
+
+        return try {
+            val pix = page.toPixmap(Matrix.Scale(1.0f), ColorSpace.DeviceRGB, true, true)
+            val bmp = Bitmap.createBitmap(pix.width, pix.height, Bitmap.Config.ARGB_8888)
+            bmp.setPixels(pix.pixels, 0, pix.width, 0, 0, pix.width, pix.height)
+            pix.destroy()
+            page.destroy()
+            thumbnailCache.put(idx, bmp)
+            bmp
+        } catch (e: Exception) {
+            // 예외가 발생해도 자원 누수 방지
+            try { page.destroy() } catch (_: Exception) {}
+            null
+        }
     }
 
     private fun calculateThumbXFromProgress(sb: BookmarkSeekBar, prog: Int): Int {

@@ -46,7 +46,7 @@ object SaveAnnotatedPDF {
         annotationView: AnnotationCanvasView,
         outputName: String,
         overwrite: Boolean = false
-    ): File {
+    ): File? {
         // 저장 위치 준비 (공용 Download 폴더)
         val downloadsDir = annotationView.context.getExternalFilesDir(
             Environment.DIRECTORY_DOWNLOADS
@@ -57,13 +57,10 @@ object SaveAnnotatedPDF {
         var outFile = File(downloadsDir, "$baseName.pdf")
 
         if (!overwrite && outFile.exists()) {
-            // outputName이 이미 "_sv" 또는 "_svN" 으로 끝나는지 확인
             val regex = Regex("(.+)_sv(\\d*)$")
             val match = regex.matchEntire(baseName)
             if (match != null) {
-                // 이미 _sv 또는 _svN 이 붙어 있는 경우
                 val root = match.groupValues[1]
-                // 기존 숫자 뒤에 +1, 없으면 2부터
                 var num = match.groupValues[2].ifEmpty { "1" }.toInt() + 1
                 do {
                     baseName = "${root}_sv$num"
@@ -71,7 +68,6 @@ object SaveAnnotatedPDF {
                     num++
                 } while (outFile.exists())
             } else {
-                // _sv 가 붙지 않은 경우
                 baseName = "${baseName}_sv"
                 outFile = File(downloadsDir, "$baseName.pdf")
                 var num = 2
@@ -81,71 +77,81 @@ object SaveAnnotatedPDF {
                 }
             }
         }
-
-        // 이미 남아 있던 파일 삭제
         if (outFile.exists()) outFile.delete()
 
-        // PdfDocument 생성
         val pdf = PdfDocument()
         val pageCount = pdfManager.pageCount()
 
-        for (i in 0 until pageCount) {
-            annotationView.setPage(i)
+        try {
+            for (i in 0 until pageCount) {
+                annotationView.setPage(i)
 
-            // 1) MuPDF로 원본 PDF 페이지를 1:1로 렌더링
-            val page: Page = pdfManager.loadPage(i)
-            val pix = page.toPixmap(Matrix.Scale(1.0f), ColorSpace.DeviceRGB, true, true)
-            val raw = pix.pixels
-            for (j in raw.indices) {
-                val px = raw[j]
-                raw[j] = ((px ushr 24) and 0xFF shl 24) or
-                        ((px      ) and 0xFF shl 16) or
-                        ((px ushr  8) and 0xFF shl  8) or
-                        ((px ushr 16) and 0xFF)
+                // (1) 안전하게 페이지/픽스맵 생성
+                val page = try { pdfManager.loadPage(i) } catch (e: Exception) { null }
+                if (page == null) throw IllegalStateException("페이지를 불러올 수 없습니다.")
+
+                val pix = try {
+                    page.toPixmap(Matrix.Scale(1.0f), ColorSpace.DeviceRGB, true, true)
+                } catch (e: Exception) {
+                    try { page.destroy() } catch (_: Exception) {}
+                    throw IllegalStateException("픽스맵 생성 실패")
+                }
+
+                val bmp = try {
+                    val raw = pix.pixels
+                    for (j in raw.indices) {
+                        val px = raw[j]
+                        raw[j] = ((px ushr 24) and 0xFF shl 24) or
+                                ((px      ) and 0xFF shl 16) or
+                                ((px ushr  8) and 0xFF shl  8) or
+                                ((px ushr 16) and 0xFF)
+                    }
+                    Bitmap.createBitmap(pix.width, pix.height, Bitmap.Config.ARGB_8888).apply {
+                        setPixels(raw, 0, pix.width, 0, 0, pix.width, pix.height)
+                    }
+                } catch (e: Exception) {
+                    try { pix.destroy() } catch (_: Exception) {}
+                    try { page.destroy() } catch (_: Exception) {}
+                    throw IllegalStateException("비트맵 생성 실패")
+                }
+                pix.destroy()
+                page.destroy()
+
+                val info = PdfDocument.PageInfo.Builder(bmp.width, bmp.height, i + 1).create()
+                val pdfPage = pdf.startPage(info)
+                pdfPage.canvas.drawBitmap(bmp, 0f, 0f, null)
+                bmp.recycle()
+
+                // 필기 좌표 변환 로직(생략 가능)
+                val topLeft = annotationView.mapModelToScreen(0f, 0f)
+                val topRight = annotationView.mapModelToScreen(bmp.width.toFloat(), 0f)
+                val bottomLeft = annotationView.mapModelToScreen(0f, bmp.height.toFloat())
+                val dispLeft = topLeft[0]
+                val dispTop = topLeft[1]
+                val dispWidth = topRight[0] - topLeft[0]
+                val dispHeight = bottomLeft[1] - topLeft[1]
+                val scaleX = bmp.width / dispWidth
+                val scaleY = bmp.height / dispHeight
+
+                pdfPage.canvas.save()
+                pdfPage.canvas.translate(-dispLeft * scaleX, -dispTop * scaleY)
+                pdfPage.canvas.scale(scaleX, scaleY)
+                annotationView.draw(pdfPage.canvas)
+                pdfPage.canvas.restore()
+
+                pdf.finishPage(pdfPage)
             }
-            val bmp = Bitmap.createBitmap(pix.width, pix.height, Bitmap.Config.ARGB_8888)
-            bmp.setPixels(raw, 0, pix.width, 0, 0, pix.width, pix.height)
-            pix.destroy(); page.destroy()
 
-            // 2) PDFDocument에 페이지 추가
-            val info = PdfDocument.PageInfo.Builder(bmp.width, bmp.height, i + 1).create()
-            val pdfPage = pdf.startPage(info)
-            pdfPage.canvas.drawBitmap(bmp, 0f, 0f, null)
-            bmp.recycle()
-
-            // ────────────────────────────────────────────────
-            // 3) annotationView의 실제 “이미지 영역”을 화면 좌표로 계산
-            //    (0,0)과 (bmp.width,bmp.height)를 mapModelToScreen에 넣으면
-            //    PDF→뷰 변환된 위치가 나옵니다.
-            val topLeft      = annotationView.mapModelToScreen(0f, 0f)
-            val topRight     = annotationView.mapModelToScreen(bmp.width.toFloat(), 0f)
-            val bottomLeft   = annotationView.mapModelToScreen(0f, bmp.height.toFloat())
-
-            val dispLeft   = topLeft[0]
-            val dispTop    = topLeft[1]
-            val dispWidth  = topRight[0]   - topLeft[0]
-            val dispHeight = bottomLeft[1] - topLeft[1]
-
-            // 4) PDF 픽셀 공간에 맞춰 offset & scale 계산
-            val scaleX = bmp.width  / dispWidth
-            val scaleY = bmp.height / dispHeight
-
-            pdfPage.canvas.save()
-            // (가) 실제 이미지가 뷰에서 떨어진 만큼 보정
-            pdfPage.canvas.translate(-dispLeft  * scaleX,
-                -dispTop   * scaleY)
-            // (나) 이미지 영역에만 스케일 적용
-            pdfPage.canvas.scale(scaleX, scaleY)
-
-            // 5) annotationView.draw: 뷰 위의 필기 레이어를 그대로 PDF에 합성
-            annotationView.draw(pdfPage.canvas)
-            pdfPage.canvas.restore()
-
-            pdf.finishPage(pdfPage)
+            FileOutputStream(outFile).use { pdf.writeTo(it) }
+            pdf.close()
+            return outFile
+        } catch (e: Exception) {
+            // 예외 발생 시 자원/파일 안전하게 정리
+            try { pdf.close() } catch (_: Exception) {}
+            if (outFile.exists()) outFile.delete()
+            e.printStackTrace()
+            return null
         }
-
-        FileOutputStream(outFile).use { pdf.writeTo(it) }
-        pdf.close()
-        return outFile
     }
+
 }

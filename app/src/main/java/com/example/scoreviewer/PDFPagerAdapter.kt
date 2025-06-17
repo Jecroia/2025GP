@@ -25,14 +25,14 @@ class PDFPagerAdapter(
     private val annotationCanvas: AnnotationCanvasView,
     private val viewPager: ViewPager2
 ) : RecyclerView.Adapter<PDFPagerAdapter.PageViewHolder>() {
-
-    private val maxMemoryKb = (Runtime.getRuntime().maxMemory() / 1024).toInt()
-    private val cacheSizeKb = maxMemoryKb / 8
-    private val bitmapCache = object : LruCache<Int, Bitmap>(cacheSizeKb) {
-        override fun sizeOf(key: Int, value: Bitmap): Int =
-            value.byteCount / 1024
+    private val bitmapCache = object : LruCache<Int, Bitmap>((Runtime.getRuntime().maxMemory() / 1024 / 8).toInt()) {
+        override fun sizeOf(key: Int, value: Bitmap): Int = value.byteCount / 1024
     }
-
+    private val pageRenderJobs = mutableMapOf<Int, Job>()
+    private var isClosed = false
+    fun closeAdapter() {
+        isClosed = true
+    }
     inner class PageViewHolder(val imageView: ImageView) : RecyclerView.ViewHolder(imageView) {
         var attacher: PhotoViewAttacher? = null
         var renderJob: Job? = null
@@ -60,70 +60,103 @@ class PDFPagerAdapter(
     }
 
     override fun onBindViewHolder(holder: PageViewHolder, position: Int) {
-        // ───────── 0. 이전 작업 정리 ─────────
-        holder.renderJob?.cancel()
-        holder.attacher = null   // PhotoViewAttacher 해제
+        // 0. 이미 어댑터가 close 상태라면 바로 return
+        if (isClosed) return
 
-        // ───────── 1. 캐시 비트맵 있으면 즉시 사용 ─────────
+        // 0-1. 이전 작업 정리
+        holder.renderJob?.cancel()
+        holder.renderJob = null
+        holder.attacher = null
+
+        // 1. 캐시 비트맵 있으면 즉시 사용
         bitmapCache.get(position)?.let { bmp ->
             if (!bmp.isRecycled) {
-                holder.originalBitmap = bmp                    // ⭐ origin 브랜치 기능 살림
-                holder.highlightedBitmap = bmp.copy(
-                    bmp.config ?: Bitmap.Config.ARGB_8888, true
-                )
-                holder.imageView.setImageBitmap(bmp)
-                attachPhotoView(holder, position)                 // attacher 재생성
-                return                                            // 더 이상 작업 불필요
-            }
-        }
-
-        // 플레이스홀더 & 기본 attacher
-        holder.imageView.setImageDrawable(null)
-        attachPhotoView(holder, position)                         // 스케일 1.0 상태의 매트릭스 반영
-
-        // 코루틴으로 페이지 렌더링
-        holder.renderJob = CoroutineScope(Dispatchers.IO).launch {
-            val bmp = renderPage(position)                        // pixmap → Bitmap 변환 포함
-            val copyForHL = bmp.copy(bmp.config ?: Bitmap.Config.ARGB_8888, true)
-
-            bitmapCache.put(position, bmp)                        // 캐시 저장
-
-            withContext(Dispatchers.Main) {
                 holder.originalBitmap = bmp
-                holder.highlightedBitmap = copyForHL
+                holder.highlightedBitmap = bmp.copy(bmp.config ?: Bitmap.Config.ARGB_8888, true)
                 holder.imageView.setImageBitmap(bmp)
-                holder.attacher?.update()                         // 스케일/팬 상태 유지
+                attachPhotoView(holder, position)
+                return
             }
         }
+
+        // 2. 플레이스홀더 & attacher 초기화
+        holder.originalBitmap = null
+        holder.highlightedBitmap = null
+        holder.imageView.setImageDrawable(null)
+        attachPhotoView(holder, position)
+
+        // 3. 비동기 PDF 렌더링 시작 (close 방어 추가)
+        val job = CoroutineScope(Dispatchers.IO).launch {
+            // PDF가 이미 닫혔는지 체크
+            if (isClosed) return@launch
+            val bmp = try {
+                renderPage(position)
+            } catch (e: Exception) {
+                null
+            }
+
+            if (bmp == null || isClosed) return@launch
+            val copyForHL = bmp.copy(bmp.config ?: Bitmap.Config.ARGB_8888, true)
+            bitmapCache.put(position, bmp)
+            withContext(Dispatchers.Main) {
+                if (isClosed) return@withContext
+                // position mismatch 체크
+                if (holder.adapterPosition == position) {
+                    holder.originalBitmap = bmp
+                    holder.highlightedBitmap = copyForHL
+                    holder.imageView.setImageBitmap(bmp)
+                    holder.attacher?.update()
+                } else {
+                    if (!bitmapCache.snapshot().values.contains(bmp)) bmp.recycle()
+                }
+            }
+        }
+        holder.renderJob = job
     }
+
 
     /** MuPDF → Android Bitmap 변환 로직 */
-    private fun renderPage(idx: Int): Bitmap {
+    private fun renderPage(idx: Int): Bitmap? {
+        // 1. 페이지 범위 및 PDFManager 닫힘 체크
         val total = pdfManager.pageCount()
-        if (idx < 0 || idx >= total) {
-            return Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888)
-        }
-        val page = pdfManager.loadPage(idx)
-        val pix = page.toPixmap(Matrix.Scale(1.0f), ColorSpace.DeviceRGB, true, true)
-        val raw = pix.pixels
-
-        // ABGR → ARGB 채널 스왑
-        for (i in raw.indices) {
-            val px = raw[i]
-            val a = (px ushr 24) and 0xFF
-            val b = (px ushr 16) and 0xFF
-            val g = (px ushr 8) and 0xFF
-            val r = px and 0xFF
-            raw[i] = (a shl 24) or (r shl 16) or (g shl 8) or b
+        if (idx < 0 || idx >= total || pdfManager.isClosed) {
+            return null
         }
 
-        val bitmap = Bitmap.createBitmap(pix.width, pix.height, Bitmap.Config.ARGB_8888)
-        bitmap.setPixels(raw, 0, pix.width, 0, 0, pix.width, pix.height)
+        // 2. 페이지 로드 시 null 체크 및 예외 처리
+        val page = try {
+            pdfManager.loadPage(idx)
+        } catch (e: Exception) {
+            null
+        }
+        if (page == null) return null
 
-        pix.destroy()
-        page.destroy()
-        return bitmap
+        // 3. toPixmap 및 픽셀 변환 예외 처리
+        return try {
+            val pix = page.toPixmap(Matrix.Scale(1.0f), ColorSpace.DeviceRGB, true, true)
+            val raw = pix.pixels
+
+            // ABGR → ARGB 채널 스왑
+            for (i in raw.indices) {
+                val px = raw[i]
+                val a = (px ushr 24) and 0xFF
+                val b = (px ushr 16) and 0xFF
+                val g = (px ushr 8) and 0xFF
+                val r = px and 0xFF
+                raw[i] = (a shl 24) or (r shl 16) or (g shl 8) or b
+            }
+
+            val bitmap = Bitmap.createBitmap(pix.width, pix.height, Bitmap.Config.ARGB_8888)
+            bitmap.setPixels(raw, 0, pix.width, 0, 0, pix.width, pix.height)
+            pix.destroy()
+            page.destroy()
+            bitmap
+        } catch (e: Exception) {
+            try { page.destroy() } catch (_: Exception) {}
+            null
+        }
     }
+
 
     /** PhotoViewAttacher 연결 및 캔버스 매트릭스 동기화 */
     private fun attachPhotoView(holder: PageViewHolder, position: Int) {
@@ -147,14 +180,20 @@ class PDFPagerAdapter(
     override fun onViewRecycled(holder: PageViewHolder) {
         super.onViewRecycled(holder)
         holder.renderJob?.cancel()
+        holder.renderJob = null
         holder.attacher = null
+
+        // 현재 뷰홀더에 표시된 비트맵이 캐시에 없는 경우만 recycle
         (holder.imageView.drawable as? BitmapDrawable)?.bitmap?.let { b ->
-            if (!bitmapCache.snapshot().values.contains(b)) {
+            if (!bitmapCache.snapshot().values.contains(b) && !b.isRecycled) {
                 b.recycle()
             }
         }
         holder.imageView.setImageDrawable(null)
+        holder.originalBitmap = null
+        holder.highlightedBitmap = null
     }
+
     fun highlightLine(pageNumber: Int, lineNumber: Int) {
         val rv = viewPager.getChildAt(0) as? RecyclerView
         val holder = rv?.findViewHolderForAdapterPosition(pageNumber) as? PageViewHolder
@@ -184,4 +223,16 @@ class PDFPagerAdapter(
             }
         }
     }
-}
+    fun releaseAll() {
+        // 1. 모든 렌더링 Job 취소
+        for (job in runningJobs) {
+            job.cancel()
+        }
+        runningJobs.clear()
+
+        // 2. 모든 비트맵 캐시 recycle & clear
+        for (bmp in bitmapCache.snapshot().values) {
+            if (!bmp.isRecycled) bmp.recycle()
+        }
+        bitmapCache.evictAll()
+    }
