@@ -3,9 +3,11 @@ package com.example.scoreviewer
 import Section
 import android.content.Intent
 import android.content.SharedPreferences
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Rect
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.OpenableColumns
@@ -25,6 +27,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.Toolbar
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.preference.PreferenceManager
 import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
@@ -32,6 +36,7 @@ import com.larswerkman.holocolorpicker.ColorPicker
 import java.io.File
 import androidx.core.view.isVisible
 import androidx.core.content.edit
+import android.Manifest
 
 class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
 
@@ -241,8 +246,21 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
 
         btnUndo.setOnClickListener { handleUndoOrRedo(isUndo = true) }
         btnRedo.setOnClickListener { handleUndoOrRedo(isUndo = false) }
-        btnSave.setOnClickListener { showSaveDialog() }
+        btnSave.setOnClickListener {
+            if (Build.VERSION.SDK_INT < 33 &&
+                ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                ActivityCompat.requestPermissions(
+                    this,
+                    arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE),
+                    1001
+                )
+                return@setOnClickListener
+            }
 
+            showSaveDialog()
+        }
         annotationCanvas.onTextTapListener = { modelX, modelY ->
             // 1) 혹시 전에 올라와 있던 EditText가 있으면 제거
             thumbnailContainer.findViewWithTag<EditText>("inlineEdit")?.let {
@@ -546,7 +564,7 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
         val radioFlatten  = dialogView.findViewById<RadioButton>(R.id.radio_flattenPdf)
 
         // 저장 경로...
-        val saveDir = this.getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS)!!
+        val saveDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
         textPathView.text = "저장 경로: ${saveDir.absolutePath}"
 
         // 추천 이름 세팅
@@ -753,5 +771,19 @@ class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
         }
         return null
     }
-
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1001) {
+            if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // 사용자가 방금 허용했으면 바로 저장 실행
+                showSaveDialog()
+            } else {
+                Toast.makeText(this, "저장을 위해 저장 권한이 필요합니다.", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 }
