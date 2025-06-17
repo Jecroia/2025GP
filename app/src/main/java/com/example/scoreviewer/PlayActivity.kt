@@ -29,6 +29,8 @@ import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import kotlin.math.abs
+import kotlin.math.roundToInt
+import org.billthefarmer.mididriver.MidiDriver
 
 class PlayActivity : AppCompatActivity() {
     private val PICK_MIDI_FILE = 2001
@@ -55,6 +57,8 @@ class PlayActivity : AppCompatActivity() {
     private var currentLines: List<MusicXmlParser.Line> = emptyList()
     private var currentLineIndex = -1
     private var musicJsonData: JSONObject? = null
+
+    private val midiDriver = MidiDriver()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -277,7 +281,7 @@ class PlayActivity : AppCompatActivity() {
         midiSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
-                    midiPlaybackManager.seekTo(progress)
+                    setVolume(progress)   // progress는 0~100
                 }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) { stopPlayback() }
@@ -652,6 +656,22 @@ class PlayActivity : AppCompatActivity() {
             Log.i("PlayActivity", "🔔 Highlighting measure $currentMeasure for $durationMs ms")
             annotationCanvas.highlight(rect, durationMs)
         }
+    }
+
+    private fun sendMasterVolume(value: Int) {
+        for (ch in 0..15) {
+            val msg = byteArrayOf(
+                (0xB0 + ch).toByte(),   // CC, channel
+                0x07,                   // Controller 7 = Volume
+                value.toByte()          // 0-127
+            )
+            midiDriver.write(msg)
+        }
+    }
+
+    fun setVolume(percent: Int) {
+        val v = (percent / 100f * 127).roundToInt().coerceIn(0, 127)
+        sendMasterVolume(v)
     }
 }
 
