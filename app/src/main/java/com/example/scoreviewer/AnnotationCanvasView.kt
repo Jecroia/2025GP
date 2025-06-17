@@ -26,7 +26,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
     private var currentPage: Int = 0
     private val pageToHistory: LinkedHashMap<Int, MutableList<Stroke>> = linkedMapOf()
     private val globalActionStack = mutableListOf<Triple<Int, Stroke, ActionType>>()
-    private val globalRedoStack   = mutableListOf<Triple<Int, Stroke, ActionType>>()
+    private val globalRedoStack = mutableListOf<Triple<Int, Stroke, ActionType>>()
     private val MAX_STROKES_PER_PAGE = 100
     private val MAX_GLOBAL_ACTIONS = 100
     private val MAX_PAGES_IN_MEMORY = 5
@@ -66,7 +66,9 @@ class AnnotationCanvasView @JvmOverloads constructor(
     }
 
     /** 툴 설정 */
-    fun setTool(tool: Tool?) { currentTool = tool }
+    fun setTool(tool: Tool?) {
+        currentTool = tool
+    }
 
     /** undo/redo도 페이지별로 작동하도록 수정 */
     fun undoLast(): Boolean {
@@ -75,12 +77,12 @@ class AnnotationCanvasView @JvmOverloads constructor(
         val history = pageToHistory.getOrPut(page) { mutableListOf() }
 
         when (type) {
-            ActionType.ADD    -> history.remove(stroke)
+            ActionType.ADD -> history.remove(stroke)
             ActionType.REMOVE -> history.add(stroke)
         }
         globalRedoStack.add(Triple(page, stroke, type))
         if (globalRedoStack.size > MAX_GLOBAL_ACTIONS) {
-                globalRedoStack.removeAt(0)
+            globalRedoStack.removeAt(0)
         }
         invalidate()
         return true
@@ -92,16 +94,17 @@ class AnnotationCanvasView @JvmOverloads constructor(
         val history = pageToHistory.getOrPut(page) { mutableListOf() }
 
         when (type) {
-            ActionType.ADD    -> history.add(stroke)
+            ActionType.ADD -> history.add(stroke)
             ActionType.REMOVE -> history.remove(stroke)
         }
         globalActionStack.add(Triple(page, stroke, type))
         if (globalActionStack.size > MAX_GLOBAL_ACTIONS) {
-                globalActionStack.removeAt(0)
+            globalActionStack.removeAt(0)
         }
         invalidate()
         return true
     }
+
     fun peekUndo(): Triple<Int, Stroke, Any>? =
         globalActionStack.lastOrNull()
 
@@ -118,7 +121,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
         history.add(newStroke)
         globalActionStack.add(Triple(currentPage, newStroke, ActionType.ADD))
         if (globalActionStack.size > MAX_GLOBAL_ACTIONS) {
-                globalActionStack.removeAt(0)
+            globalActionStack.removeAt(0)
         }
         invalidate()
     }
@@ -147,13 +150,14 @@ class AnnotationCanvasView @JvmOverloads constructor(
                         // ◀───────────────────────────────────────────────────◀
                         // 1) 새로운 Stroke.PathStroke 생성 (기존과 동일하되, lastTouch 초기화 추가)
                         val paint = makePaintFor(tool)
-                        val path  = Path().apply { moveTo(modelX, modelY) }
-                        val newStroke = Stroke.PathStroke(path, paint,
+                        val path = Path().apply { moveTo(modelX, modelY) }
+                        val newStroke = Stroke.PathStroke(
+                            path, paint,
                             mutableListOf(PointF(modelX, modelY))
                         )
                         history.add(newStroke)
                         if (history.size > MAX_STROKES_PER_PAGE) {
-                                history.removeAt(0)
+                            history.removeAt(0)
                         }
                         globalActionStack.add(Triple(currentPage, newStroke, ActionType.ADD))
 
@@ -162,6 +166,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
                         lastTouchY = modelY
                         // ◀───────────────────────────────────────────────────◀
                     }
+
                     MotionEvent.ACTION_MOVE -> (history.lastOrNull() as? Stroke.PathStroke)?.let { stroke ->
                         // ◀───────────────────────────────────────────────────◀
                         // 1) 이전 좌표와 현재 좌표의 중간 지점을 계산
@@ -179,11 +184,13 @@ class AnnotationCanvasView @JvmOverloads constructor(
                         lastTouchY = modelY
                         // ◀───────────────────────────────────────────────────◀
                     }
+
                     MotionEvent.ACTION_UP -> (history.lastOrNull() as? Stroke.PathStroke)?.let { stroke ->
                         // (선택 사항) 마지막에 깔끔하게 마무리: 마지막 좌표로 꼭 그려 주고 싶으면 아래처럼 lineTo
                         stroke.path.lineTo(lastTouchX, lastTouchY)
                         stroke.points.add(PointF(lastTouchX, lastTouchY))
                     }
+
                     else -> {}
                 }
                 invalidate()
@@ -202,6 +209,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
                                     removed.add(s)
                                     erased = true
                                 }
+
                             is Stroke.TextStroke -> {
                                 val bounds = RectF(
                                     s.x,
@@ -219,9 +227,15 @@ class AnnotationCanvasView @JvmOverloads constructor(
                     }
                     if (erased) {
                         removed.forEach { removedStroke ->
-                            globalActionStack.add(Triple(currentPage, removedStroke, ActionType.REMOVE))
+                            globalActionStack.add(
+                                Triple(
+                                    currentPage,
+                                    removedStroke,
+                                    ActionType.REMOVE
+                                )
+                            )
                             if (globalActionStack.size > MAX_GLOBAL_ACTIONS) {
-                                    globalActionStack.removeAt(0)
+                                globalActionStack.removeAt(0)
                             }
                         }
                         globalRedoStack.clear()
@@ -372,21 +386,32 @@ class AnnotationCanvasView @JvmOverloads constructor(
 
     private fun intersectsPath(points: List<PointF>, px: Float, py: Float, radius: Float): Boolean {
         for (i in 0 until points.size - 1) {
-            val p1 = points[i]; val p2 = points[i + 1]
+            val p1 = points[i];
+            val p2 = points[i + 1]
             if (distancePointToSegment(px, py, p1.x, p1.y, p2.x, p2.y) <= radius)
                 return true
         }
         return false
     }
 
-    private fun distancePointToSegment(px: Float, py: Float, x1: Float, y1: Float, x2: Float, y2: Float): Float {
-        val dx = x2 - x1; val dy = y2 - y1
+    private fun distancePointToSegment(
+        px: Float,
+        py: Float,
+        x1: Float,
+        y1: Float,
+        x2: Float,
+        y2: Float
+    ): Float {
+        val dx = x2 - x1;
+        val dy = y2 - y1
         if (dx == 0f && dy == 0f) return hypot(px - x1, py - y1)
-        val t = ((px - x1) * dx + (py - y1) * dy) / (dx*dx + dy*dy)
+        val t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)
         val ct = t.coerceIn(0f, 1f)
-        val projX = x1 + ct*dx; val projY = y1 + ct*dy
+        val projX = x1 + ct * dx;
+        val projY = y1 + ct * dy
         return hypot(px - projX, py - projY)
     }
+
     private fun getHistoryForPage(page: Int): MutableList<Stroke> {
         // 이미 존재하는 페이지라면 순서를 갱신
         pageToHistory[page]?.let { existingList ->
@@ -429,6 +454,7 @@ class AnnotationCanvasView @JvmOverloads constructor(
         globalActionStack.clear()
         globalRedoStack.clear()
         invalidate()
+    }
     fun highlight(rect: RectF?, durationMs: Int) {
         if (rect == null) return
         highlightRect = rect
@@ -444,7 +470,6 @@ class AnnotationCanvasView @JvmOverloads constructor(
                 invalidate()
             }
         }
-
         postDelayed(highlightRemovalRunnable, durationMs.toLong())
     }
 }

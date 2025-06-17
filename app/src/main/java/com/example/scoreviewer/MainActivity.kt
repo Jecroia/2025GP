@@ -13,9 +13,7 @@ import android.view.inputmethod.InputMethodManager
 import android.view.GestureDetector
 import android.view.MotionEvent
 import android.view.View
-import android.view.MenuItem
 import android.view.inputmethod.EditorInfo
-import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
@@ -34,8 +32,6 @@ import com.larswerkman.holocolorpicker.ColorPicker
 import java.io.File
 import androidx.core.view.isVisible
 import androidx.core.content.edit
-import com.google.android.material.bottomsheet.BottomSheetDialog
-import android.os.Environment
 
 class MainActivity : AppCompatActivity(), BookmarkDialogFragment.HostCallback {
 
