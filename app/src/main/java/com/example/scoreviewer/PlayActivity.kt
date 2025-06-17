@@ -1,6 +1,7 @@
 package com.example.scoreviewer
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
 import android.content.pm.PackageManager
@@ -9,6 +10,7 @@ import android.graphics.Color
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
 import android.provider.OpenableColumns
 import android.util.Log
 import android.view.WindowManager
@@ -42,7 +44,6 @@ class PlayActivity : AppCompatActivity() {
     private lateinit var annotationCanvas: AnnotationCanvasView
     private lateinit var midiPlaybackManager: MidiPlaybackManager
     private lateinit var syncPanelManager: SyncPanelManager
-    private lateinit var playbackState: PlaybackState
 
     private lateinit var syncOffsetInput: EditText
     private lateinit var startDelayInput: EditText
@@ -55,19 +56,30 @@ class PlayActivity : AppCompatActivity() {
     private var currentLines: List<MusicXmlParser.Line> = emptyList()
     private var currentLineIndex = -1
     private var musicJsonData: JSONObject? = null
+    private val PREF_NAME = "PlaybackPrefs"
+    private lateinit var playbackState: PlaybackState
+    private var restoredPage: Int = 0
+    private var restoredMillis: Int = 0
 
+    // PDF마다 유니크한 ID 생성 ("코드_pdf이름_크기_타임스탬프")
+    private fun pdfId(pdfPath: String): String {
+        val f = File(pdfPath)
+        return "${f.name}_${f.length()}_${f.lastModified()}"
+    }
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_play)
-        
+        Log.i("PlayActivity", "autoMatch result — midiPath: $midiPath, musicXmlPath: $musicXmlPath")
+
         // 권한 체크 및 요청
         checkAndRequestPermissions()
-        
+
         pdfPath = intent.getStringExtra("pdfPath")
         midiPath = intent.getStringExtra("midiPath")
         musicXmlPath = intent.getStringExtra("musicXmlPath")
         val autoMatchFailed = intent.getBooleanExtra("autoMatchFailed", false)
         initializeViews()
+        playbackState = PlaybackState(this)
         val prefs = PreferenceManager.getDefaultSharedPreferences(this)
         val resetPrefs = intent.getBooleanExtra("resetPrefs", false)
         if (resetPrefs && pdfPath != null) {
@@ -82,6 +94,8 @@ class PlayActivity : AppCompatActivity() {
         setupPlaybackManager()
         setupSyncPanel()
         setupPlaybackState()
+        loadSavedFiles()
+        checkForMidiFile()
         if (pdfPath != null) loadPdfFile()
         if (midiPath != null) loadMidiFile()
         if (musicXmlPath != null) {
@@ -187,26 +201,22 @@ class PlayActivity : AppCompatActivity() {
     }
 
     private fun loadSavedFiles() {
-        val savedState = playbackState.loadState()
-        pdfPath = intent.getStringExtra("pdfPath") ?: savedState.pdfPath
-        midiPath = intent.getStringExtra("midiPath") ?: savedState.midiPath
-        musicXmlPath = intent.getStringExtra("musicXmlPath") ?: savedState.musicXmlPath
-        if (pdfPath != null) {
-            loadPdfFile()
-        }
-        if (midiPath != null) {
-            loadMidiFile()
-        }
-        if (musicXmlPath != null) {
-            val xmlFile = File(musicXmlPath!!)
-            if (xmlFile.exists() && xmlFile.canRead()) {
-                pageChangeTimes = MusicXmlParser.parsePageChangeTimes(xmlFile)
-                currentLines = MusicXmlParser.parseLines(xmlFile)
-            } else {
-                Log.w("PlayActivity", "Saved MusicXML path not readable; skipping auto-parse")
-            }
-        }
-        if (playbackState.shouldRestoreState()) {
+        // 1) PDF 경로 확보
+        pdfPath = intent.getStringExtra("pdfPath") ?: return
+        loadPdfFile()
+
+        // 2) PDF별로 저장된 페이지·밀리초 불러오기
+        val (savedPage, savedMillis) = loadPositionForPdf(this, pdfPath!!)
+        restoredPage   = savedPage
+        restoredMillis = savedMillis
+
+        // 3) PDF별로 저장된 MIDI 경로 불러오기
+        midiPath = intent.getStringExtra("midiPath")
+            ?: loadMidiForPdf(this, pdfPath!!)
+        if (midiPath != null) loadMidiFile()
+
+        // 4) 복원 다이얼로그 조건
+        if (midiPath != null && (restoredPage != 0 || restoredMillis != 0)) {
             showRestoreDialog()
         }
     }
@@ -237,7 +247,20 @@ class PlayActivity : AppCompatActivity() {
             midiPath = null
         }
     }
+    fun loadPositionForPdf(context: Context, pdfPath: String): Pair<Int, Int> {
+        val prefs = context.getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+        val id = pdfId(pdfPath)
+        // 기본값으로는 글로벌 KEY_PAGE/KEY_MILLIS 사용
+        val page  = prefs.getInt("${id}_page",  prefs.getInt("last_page",   0))
+        val millis= prefs.getInt("${id}_millis",prefs.getInt("last_millis", 0))
+        return page to millis
+    }
 
+    fun loadMidiForPdf(context: Context, pdfPath: String): String? {
+        val prefs = context.getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+        val id = pdfId(pdfPath)
+        return prefs.getString("${id}_midiPath", null)
+    }
     private fun setupControlButtons() {
         findViewById<ImageButton>(R.id.btnPlay).setOnClickListener {
             if (midiPath == null) {
@@ -275,13 +298,30 @@ class PlayActivity : AppCompatActivity() {
 
     private fun setupSeekBar() {
         midiSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            // 드래그 시작 전 상태 저장
+            private var wasPlaying = false
+
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {
+                // 실제 재생 중이면 일시정지하고, 그 상태를 기록
+                wasPlaying = midiPlaybackManager.isCurrentlyPlaying()
+                if (wasPlaying) {
+                    stopPlayback()
+                }
+            }
+
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
+                    // 사용자가 슬라이더를 움직일 때만 위치 변경
                     midiPlaybackManager.seekTo(progress)
                 }
             }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) { stopPlayback() }
-            override fun onStopTrackingTouch(seekBar: SeekBar?) { startPlayback() }
+
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {
+                // 드래그를 끝낼 때, 애초에 재생 중이었던 상태면 재생 재개
+                if (wasPlaying) {
+                    startPlayback()
+                }
+            }
         })
     }
 
@@ -309,17 +349,34 @@ class PlayActivity : AppCompatActivity() {
 
         timeText.text = "$currentFormatted / $totalFormatted"
     }
-
     private fun showRestoreDialog() {
-        val savedState = playbackState.loadState()
+        // ① Companion object에서 불러온 PDF별 복원 정보 사용
+        val pageToRestore  = restoredPage
+        val millisToRestore = restoredMillis
+
         AlertDialog.Builder(this)
             .setTitle("이전 세션 복원")
-            .setMessage("페이지 ${savedState.page + 1}, 시간 ${formatMillis(savedState.millis.toLong())}로 복원하시겠습니까?")
+            .setMessage("페이지 ${pageToRestore + 1}, 시간 ${formatMillis(millisToRestore.toLong())}로 복원하시겠습니까?")
             .setPositiveButton("예") { _, _ ->
-                viewPager.setCurrentItem(savedState.page, false)
-                midiPlaybackManager.seekTo(savedState.millis)
+                // ② 화면 복원
+                viewPager.setCurrentItem(pageToRestore, false)
+                midiPlaybackManager.seekTo(millisToRestore)
+
+                // ③ 복원 선택 즉시 PDF별 상태 다시 저장
+                pdfPath?.let {
+                    val id = pdfId(it)
+                    val prefs = getSharedPreferences(PREF_NAME, MODE_PRIVATE)
+                    prefs.edit().apply {
+                        putInt("${id}_page",   pageToRestore)
+                        putInt("${id}_millis", millisToRestore)
+                        // MIDI 경로도 저장
+                        putString("${id}_midiPath", midiPath)
+                        apply()
+                    }
+                }
             }
             .setNegativeButton("아니오") { _, _ ->
+                // 사용자가 '아니오' 선택 시, 글로벌 동기·지연 설정만 초기화
                 syncPanelManager.clearPreferences()
             }
             .show()
@@ -465,13 +522,15 @@ class PlayActivity : AppCompatActivity() {
     }
 
     private fun savePlaybackState() {
-        playbackState.saveState(
-            page = viewPager.currentItem,
-            millis = midiPlaybackManager.getCurrentTime(),
-            pdfPath = pdfPath,
-            midiPath = midiPath,
-            musicXmlPath = musicXmlPath
-        )
+        pdfPath?.let {
+           playbackState.saveStateForPdf(
+               pdfPath       = it,
+               page          = viewPager.currentItem,
+               millis        = midiPlaybackManager.getCurrentTime(),
+               midiPath      = midiPath,
+               musicXmlPath  = musicXmlPath
+           )
+        }
     }
 
     override fun onPause() {
@@ -480,8 +539,12 @@ class PlayActivity : AppCompatActivity() {
     }
 
     override fun onSupportNavigateUp(): Boolean {
-        savePlaybackState()
-        onBackPressedDispatcher.onBackPressed()
+        // 재생 중이면 중지
+        if (midiPlaybackManager.isCurrentlyPlaying()) {
+            stopPlayback()
+        }
+        // 화면 종료
+        finish()
         return true
     }
 

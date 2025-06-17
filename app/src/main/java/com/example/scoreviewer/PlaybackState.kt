@@ -2,58 +2,73 @@ package com.example.scoreviewer
 
 import android.content.Context
 import android.content.SharedPreferences
+import java.io.File
 
 class PlaybackState(context: Context) {
     companion object {
         private const val PREF_NAME = "PlaybackPrefs"
-        private const val KEY_PAGE = "last_page"
-        private const val KEY_MILLIS = "last_millis"
-        private const val KEY_PDF_PATH = "last_pdf"
-        private const val KEY_MIDI_PATH = "last_midi"
-        private const val KEY_MUSICXML_PATH = "last_musicxml"
     }
 
-    private val prefs: SharedPreferences = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+    private val prefs: SharedPreferences =
+        context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)
+
+    /** PDF 경로·크기·수정일 조합으로 고유 ID 생성 */
+    private fun pdfId(pdfPath: String): String {
+        val f = File(pdfPath)
+        return "${f.name}_${f.length()}_${f.lastModified()}"
+    }
 
     data class SavedState(
         val page: Int,
         val millis: Int,
-        val pdfPath: String?,
         val midiPath: String?,
         val musicXmlPath: String?
     )
 
-    fun saveState(page: Int, millis: Int, pdfPath: String?, midiPath: String?, musicXmlPath: String?) {
+    /** PDF별로 상태 저장 */
+    fun saveStateForPdf(
+        pdfPath: String,
+        page: Int,
+        millis: Int,
+        midiPath: String?,
+        musicXmlPath: String?
+    ) {
+        val id = pdfId(pdfPath)
         prefs.edit().apply {
-            putInt(KEY_PAGE, page)
-            putInt(KEY_MILLIS, millis)
-            putString(KEY_PDF_PATH, pdfPath)
-            putString(KEY_MIDI_PATH, midiPath)
-            putString(KEY_MUSICXML_PATH, musicXmlPath)
+            putInt("${id}_page", page)
+            putInt("${id}_millis", millis)
+            putString("${id}_midiPath", midiPath)
+            putString("${id}_musicXmlPath", musicXmlPath)
             apply()
         }
     }
 
-    fun loadState(): SavedState {
+    /** PDF별로 상태 불러오기 */
+    fun loadStateForPdf(pdfPath: String): SavedState {
+        val id = pdfId(pdfPath)
         return SavedState(
-            page = prefs.getInt(KEY_PAGE, -1),
-            millis = prefs.getInt(KEY_MILLIS, -1),
-            pdfPath = prefs.getString(KEY_PDF_PATH, null),
-            midiPath = prefs.getString(KEY_MIDI_PATH, null),
-            musicXmlPath = prefs.getString(KEY_MUSICXML_PATH, null)
+            page         = prefs.getInt("${id}_page", 0),
+            millis       = prefs.getInt("${id}_millis", 0),
+            midiPath     = prefs.getString("${id}_midiPath", null),
+            musicXmlPath = prefs.getString("${id}_musicXmlPath", null)
         )
     }
 
-    fun shouldRestoreState(): Boolean {
-        val savedState = loadState()
-        return savedState.page != -1 &&
-                savedState.millis != -1 &&
-                !(savedState.page == 0 && savedState.millis == 0) &&
-                savedState.pdfPath != null &&
-                savedState.midiPath != null
+    /** 현재 PDF에 대해 복원 가능한 상태인지 */
+    fun shouldRestoreForPdf(pdfPath: String): Boolean {
+        val s = loadStateForPdf(pdfPath)
+        return (s.page != 0 || s.millis != 0) && s.midiPath != null
     }
 
-    fun clearState() {
-        prefs.edit().clear().apply()
+    /** PDF별 저장 내용 삭제할 때 필요하면 호출 */
+    fun clearStateForPdf(pdfPath: String) {
+        val id = pdfId(pdfPath)
+        prefs.edit().apply {
+            remove("${id}_page")
+            remove("${id}_millis")
+            remove("${id}_midiPath")
+            remove("${id}_musicXmlPath")
+            apply()
+        }
     }
-} 
+}

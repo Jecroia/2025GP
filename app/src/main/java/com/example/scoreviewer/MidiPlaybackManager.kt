@@ -121,7 +121,11 @@ class MidiPlaybackManager(
     fun stopPlayback() {
         isPlaying = false
         isCountdownActive = false
-        handler.removeCallbacks(updateRunnable)
+
+        // updateRunnable 이 null 이 아니면 removeCallbacks 호출
+        updateRunnable.let { handler.removeCallbacks(it) }
+
+        // countdownRunnable 은 lateinit 이므로 초기화 여부를 검사
         if (::countdownRunnable.isInitialized) {
             handler.removeCallbacks(countdownRunnable)
         }

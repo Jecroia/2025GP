@@ -501,8 +501,8 @@ class AnnotationCanvasView @JvmOverloads constructor(
 
     fun clearHighlight() {
         highlightRemovalRunnable?.let { removeCallbacks(it) }
-        highlightRemovalRunnable = null
         highlightRectPage = null
+        // 다시 그리기
         invalidate()
     }
 }
