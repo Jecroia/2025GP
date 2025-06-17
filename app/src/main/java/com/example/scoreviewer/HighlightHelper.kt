@@ -8,26 +8,47 @@ import kotlin.math.roundToInt
 object HighlightHelper {
 
     fun parseMeasureRatios(desc: String): List<Double> {
-        return desc.split("+").map { part ->
-            val trimmed = part.trim().replace(" ", "")
+        val results = mutableListOf<Double>()
+
+        desc.split("+").forEach { rawPart ->
+            val trimmed = rawPart.trim().replace(" ", "")
+            if (trimmed.isEmpty()) return@forEach
+
             when {
-                trimmed.endsWith("마디") -> 1.0
+                // N마디  → N 개의 1.0 추가 (각 마디)
+                trimmed.endsWith("마디") -> {
+                    val numStr = trimmed.removeSuffix("마디")
+                    val count = numStr.toIntOrNull() ?: 1
+                    repeat(count) { results.add(1.0) }
+                }
+
+                // 박자 단위 (예: 3박자, 3+2/4박자)
                 trimmed.endsWith("박자") -> {
                     val expr = trimmed.removeSuffix("박자")
-                    expr.split("+").sumOf { sub ->
+                    val beatSum = expr.split("+").sumOf { sub ->
                         if ("/" in sub) {
                             val (a, b) = sub.split("/").map { it.toDouble() }
                             a / b
                         } else sub.toDouble()
-                    } / 4.0
+                    }
+                    // 4박자를 한 마디로 가정 → beatSum/4 만큼의 마디 비율
+                    results.add(beatSum / 4.0)
                 }
+
+                // 분수 표현만 온 경우 (예: 1/2)
                 "/" in trimmed -> {
                     val (a, b) = trimmed.split("/").map { it.toDouble() }
-                    a / b
+                    results.add(a / b)
                 }
-                else -> 0.0
+
+                else -> {
+                    // 숫자만 온 경우 → 그대로 비율로
+                    trimmed.toDoubleOrNull()?.let { results.add(it) }
+                }
             }
         }
+
+        return results
     }
 
     fun calculateHighlightY(
@@ -74,10 +95,14 @@ object HighlightHelper {
         // total 이 0 또는 NaN 이면 균등 분배
         if (total <= 0 || total.isNaN()) {
             val part = (totalMs.toDouble() / ratios.size).roundToInt()
-            return List(ratios.size) { part }
+            val result = List(ratios.size) { part }
+            Log.d("HighlightHelper", "splitLineDuration (uniform): ratios=$ratios totalMs=$totalMs result=$result")
+            return result
         }
 
-        return ratios.map { ((it / total) * totalMs).roundToInt() }
+        val result = ratios.map { ((it / total) * totalMs).roundToInt() }
+        Log.d("HighlightHelper", "splitLineDuration: ratios=$ratios totalMs=$totalMs result=$result")
+        return result
     }
 
     fun getHighlightRect(

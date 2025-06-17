@@ -50,8 +50,16 @@ object MusicXmlParser {
 
         // 각 마디의 지속 시간 계산
         val measureTimings = measures.map { measure ->
-            val duration = if (measure.duration > 0) {
-                ((measure.duration.toDouble() * 60_000) / (measure.divisions * measure.tempo)).roundToInt()
+            val duration = if (measure.duration > 0 && measure.divisions > 0) {
+                val ms = ((measure.duration.toDouble() * 60_000) / (measure.divisions * measure.tempo))
+                // duration / divisions should equal beats; if 차이 50% 이상이면 fallback
+                val expectedBeats = measure.beats.toDouble()
+                val actualBeats = measure.duration.toDouble() / measure.divisions
+                if (kotlin.math.abs(actualBeats - expectedBeats) / expectedBeats < 0.5) {
+                    ms.roundToInt()
+                } else {
+                    (measure.beats * 60_000 / measure.tempo).roundToInt()
+                }
             } else {
                 (measure.beats * 60_000 / measure.tempo).roundToInt()
             }
@@ -143,6 +151,7 @@ object MusicXmlParser {
         var currentJumpType: String? = null
         var currentPageNumber = 1  // 첫 페이지를 1로 시작
         var insideNote = false  // note 태그 내부 여부를 추적하는 변수 추가
+        var tempoFromMetronome = false
 
         try {
             val factory = XmlPullParserFactory.newInstance()
@@ -162,26 +171,12 @@ object MusicXmlParser {
                                 }
                                 "measure" -> {
                                     measureNumber++
-                                    // 페이지 번호 파싱
+                                    // 페이지 번호 파싱 (속성은 measure 태그에 있으므로 여기서만 처리)
                                     val pageAttr = parser.getAttributeValue(null, "page")
                                     if (pageAttr != null) {
                                         currentPageNumber = pageAttr.toIntOrNull() ?: currentPageNumber
                                     }
-                                    measures.add(Measure(
-                                        measureNumber,
-                                        currentBeats,
-                                        currentBeatType,
-                                        currentTempo,
-                                        currentDivisions,
-                                        currentDuration,
-                                        currentRepeatStart,
-                                        currentRepeatEnd,
-                                        currentRepeatCount,
-                                        currentJumpTo,
-                                        currentJumpType,
-                                        currentPageNumber
-                                    ))
-                                    // 마디 시작 시 상태 초기화
+                                    // 마디가 시작되면 duration 누적 초기화
                                     currentDuration = 0
                                     currentRepeatStart = false
                                     currentRepeatEnd = false
@@ -191,9 +186,9 @@ object MusicXmlParser {
                                 }
                                 "sound" -> {
                                     val tempoAttr = parser.getAttributeValue(null, "tempo")
-                                    if (tempoAttr != null) {
+                                    if (tempoAttr != null && !tempoFromMetronome) {
                                         currentTempo = tempoAttr.toFloatOrNull() ?: currentTempo
-                                        Log.d(TAG, "Found tempo change: $currentTempo BPM")
+                                        Log.d(TAG, "Found tempo change via <sound>: $currentTempo BPM")
                                     }
                                 }
                                 "time" -> {
@@ -275,13 +270,36 @@ object MusicXmlParser {
                                         Log.d(TAG, "New page detected via <print>: page=$currentPageNumber")
                                     }
                                 }
+                                "per-minute" -> {
+                                    val tempoVal = parser.nextText().toFloatOrNull()
+                                    if (tempoVal != null) {
+                                        currentTempo = tempoVal
+                                        tempoFromMetronome = true
+                                        Log.d(TAG, "Found tempo change via <per-minute>: $currentTempo BPM")
+                                    }
+                                }
                             }
                         }
                         XmlPullParser.END_TAG -> {
                             when (parser.name) {
-                                "note" -> {
-                                    insideNote = false
+                                "measure" -> {
+                                    // measure 내부 태그들을 모두 읽은 후 Measure 객체 생성
+                                    measures.add(Measure(
+                                        measureNumber,
+                                        currentBeats,
+                                        currentBeatType,
+                                        currentTempo,
+                                        currentDivisions,
+                                        currentDuration,
+                                        currentRepeatStart,
+                                        currentRepeatEnd,
+                                        currentRepeatCount,
+                                        currentJumpTo,
+                                        currentJumpType,
+                                        currentPageNumber
+                                    ))
                                 }
+                                "note" -> insideNote = false
                             }
                         }
                     }
@@ -352,10 +370,18 @@ object MusicXmlParser {
             currentTempo = measure.tempo
 
             // 마디의 지속 시간을 밀리초로 변환
-            val measureDurationMs = if (measure.duration > 0) {
-                ((measure.duration.toDouble() * 60_000) / (currentDivisions * currentTempo)).roundToInt()
+            val measureDurationMs = if (measure.duration > 0 && measure.divisions > 0) {
+                val ms = ((measure.duration.toDouble() * 60_000) / (measure.divisions * measure.tempo))
+                // duration / divisions should equal beats; if 차이 50% 이상이면 fallback
+                val expectedBeats = measure.beats.toDouble()
+                val actualBeats = measure.duration.toDouble() / measure.divisions
+                if (kotlin.math.abs(actualBeats - expectedBeats) / expectedBeats < 0.5) {
+                    ms.roundToInt()
+                } else {
+                    (measure.beats * 60_000 / measure.tempo).roundToInt()
+                }
             } else {
-                (measure.beats * 60_000 / currentTempo).roundToInt()
+                (measure.beats * 60_000 / measure.tempo).roundToInt()
             }
             
             Log.d(TAG, "Measure ${measure.number}: tempo=$currentTempo BPM, divisions=$currentDivisions, " +
