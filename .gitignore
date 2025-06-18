@@ -11,3 +11,4 @@ app/build/
 .cxx/
 local.properties
 .DS_Store
+app/release/baselineProfiles/1/app-release.dm
