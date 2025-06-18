@@ -31,6 +31,7 @@ import java.io.IOException
 import kotlin.math.abs
 import kotlin.math.roundToInt
 import com.example.scoreviewer.LastPlayCache
+import org.json.JSONArray
 
 class PlayActivity : AppCompatActivity() {
     private val PICK_MIDI_FILE = 2001
@@ -57,6 +58,9 @@ class PlayActivity : AppCompatActivity() {
     private var currentLines: List<MusicXmlParser.Line> = emptyList()
     private var currentLineIndex = -1
     private var musicJsonData: JSONObject? = null
+    private var lastHighlightedMeasure: Int = -1  // 마지막으로 하이라이트된 마디 번호
+    private var lastHighlightExpireTime: Long = 0 // 해당 하이라이트가 만료되는 System 시간(ms)
+    private var timelineScale: Double = 1.0   // MIDI 타임(ms) → 시각적 타임(ms) 변환 배율
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -92,9 +96,31 @@ class PlayActivity : AppCompatActivity() {
                 pageChangeTimes = MusicXmlParser.parsePageChangeTimes(xmlFile)
                 currentLines = MusicXmlParser.parseLines(xmlFile)
                 loadJsonForHighlight()
+                // JSON 기반 라인 재구성
+                musicJsonData?.let { rootJson ->
+                    currentLines = buildLinesFromJson(xmlFile, rootJson)
+
+                    // ── 메타데이터와 XML 간 마디 수 비교 ──
+                    val metaCount = computeMeasureCountFromJson(rootJson)
+                    val xmlCount = currentLines.sumOf { it.measureNumbers.size }
+                    if (metaCount != xmlCount) {
+                        Log.w("PlayActivity", "⚠️ Measure count mismatch: metadata=$metaCount, XML=$xmlCount")
+                    } else {
+                        Log.d("PlayActivity", "Measure count verified: $xmlCount")
+                    }
+
+                    // ── MIDI 길이와 라인 기반 길이 스케일 계산 ──
+                    val expectedTotalMs = currentLines.lastOrNull()?.endTimeMs ?: 0
+                    val midiTotal = midiPlaybackManager.getTotalTime()
+                    if (expectedTotalMs > 0 && midiTotal > 0) {
+                        timelineScale = expectedTotalMs.toDouble() / midiTotal.toDouble()
+                        Log.d("PlayActivity", "timelineScale computed: $timelineScale (expected=$expectedTotalMs, midi=$midiTotal)")
+                    }
+                }
                 annotationCanvas.post {
                     currentLineIndex = -1
-                    updateCurrentLine(midiPlaybackManager.getCurrentTime())
+                    val visualNow = (midiPlaybackManager.getCurrentTime() * timelineScale).toInt()
+                    updateCurrentLine(visualNow)
                 }
             } else {
                 Log.w("PlayActivity", "MusicXML file not readable in onCreate; waiting for user selection")
@@ -149,17 +175,27 @@ class PlayActivity : AppCompatActivity() {
         midiPlaybackManager = MidiPlaybackManager(
             context = this,
             onTimeUpdate = { currentMillis, totalMillis ->
-                updateTimeDisplay(currentMillis, totalMillis)
-                updateCurrentLine(currentMillis)
+                val visualMillis = (currentMillis * timelineScale).toInt()
+                val visualTotal = (totalMillis * timelineScale).toInt()
+
+                // 화면 표시 및 SeekBar도 시각 타임 기준으로
+                updateTimeDisplay(visualMillis, visualTotal)
+                midiSeekBar.max = visualTotal
+                midiSeekBar.progress = visualMillis
+
+                updateCurrentLine(visualMillis)
+
+                // 페이지 전환: JSON 기반 pageChangeTimes 우선, 없으면 라인 기반 updateCurrentLine 내부 처리
                 if (pageChangeTimes.isNotEmpty()) {
-                    val nextPage = pageChangeTimes.indexOfLast { it <= currentMillis }
-                    if (nextPage != -1 && nextPage != viewPager.currentItem) {
-                        viewPager.setCurrentItem(nextPage, true)
+                    val next = pageChangeTimes.indexOfLast { it <= visualMillis }
+                    if (next >= 0 && next != viewPager.currentItem) {
+                        viewPager.setCurrentItem(next, true)
                     }
                 }
             },
             onPageTransition = { pageNumber ->
-                if (pageChangeTimes.isEmpty()) {
+                // MusicXML 라인 정보가 없는 경우(자동 분석 실패)엔 기본 시간 비율 전환 사용
+                if (currentLines.isEmpty()) {
                     viewPager.setCurrentItem(pageNumber, true)
                 }
             },
@@ -288,7 +324,8 @@ class PlayActivity : AppCompatActivity() {
         midiSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 if (fromUser) {
-                    midiPlaybackManager.seekTo(progress)
+                    val midiTarget = if (timelineScale != 0.0) (progress / timelineScale).toInt() else progress
+                    midiPlaybackManager.seekTo(midiTarget)
                 }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) { stopPlayback() }
@@ -431,6 +468,12 @@ class PlayActivity : AppCompatActivity() {
             if (jsonText != null) {
                 val jsonObject = JSONObject(jsonText)
                 musicJsonData = jsonObject.optJSONObject("pages")
+
+                // JSON 기반 페이지 전환 타이밍 계산 (MusicXML 파싱 실패 대비용)
+                if (pageChangeTimes.isEmpty()) {
+                    pageChangeTimes = computePageChangeTimesFromJson(jsonObject)
+                    Log.d("PlayActivity", "pageChangeTimes from JSON: $pageChangeTimes")
+                }
             } else {
                 Log.w("PlayActivity", "Highlight JSON could not be loaded")
             }
@@ -454,7 +497,8 @@ class PlayActivity : AppCompatActivity() {
             // 뷰가 레이아웃된 이후에 하이라이트 계산을 실행해야 정확한 좌표가 나옴
             annotationCanvas.post {
                 currentLineIndex = -1
-                updateCurrentLine(midiPlaybackManager.getCurrentTime())
+                val visualNow = (midiPlaybackManager.getCurrentTime() * timelineScale).toInt()
+                updateCurrentLine(visualNow)
             }
             Toast.makeText(this, "MusicXML 파일이 성공적으로 로드되었습니다.", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
@@ -601,6 +645,12 @@ class PlayActivity : AppCompatActivity() {
 
         val currentLine = currentLines[newLineIndex]
 
+        // 페이지가 예상과 다르면 즉시 전환 (라인 기반)
+        val desiredPageIdx = currentLine.pageNumber - 1
+        if (desiredPageIdx != viewPager.currentItem) {
+            viewPager.setCurrentItem(desiredPageIdx, true)
+        }
+
         // 라인 변경 시 PDF 하이라이트 갱신
         if (newLineIndex != currentLineIndex) {
             currentLineIndex = newLineIndex
@@ -632,6 +682,11 @@ class PlayActivity : AppCompatActivity() {
         }
 
         val currentMeasure = currentLine.measureNumbers.getOrNull(measureIdxInLine) ?: return
+
+        // 이미 같은 마디가 하이라이트 중이면 중복으로 처리하지 않음
+        if (currentMeasure == lastHighlightedMeasure && System.currentTimeMillis() < lastHighlightExpireTime) {
+            return
+        }
 
         Log.i("PlayActivity", "🎵 Trying to highlight measure $currentMeasure")
 
@@ -669,7 +724,102 @@ class PlayActivity : AppCompatActivity() {
             val (rect, durationMs) = result
             Log.i("PlayActivity", "🔔 Highlighting measure $currentMeasure for $durationMs ms")
             annotationCanvas.highlight(rect, durationMs)
+            // 중복 방지를 위해 상태 갱신
+            lastHighlightedMeasure = currentMeasure
+            lastHighlightExpireTime = System.currentTimeMillis() + durationMs
         }
+    }
+
+    /** JSON 메타데이터만으로 페이지별 전환 타임(ms) 계산 */
+    private fun computePageChangeTimesFromJson(root: JSONObject): List<Int> {
+        val pagesObj = root.optJSONObject("pages") ?: return emptyList()
+        val bpm = root.optInt("bpm", 120)
+        val measureMs = (60_000 / bpm.toDouble()) * 4   // 4/4 기본 가정
+
+        val pageNumbers = pagesObj.keys().asSequence()
+            .mapNotNull { it.toIntOrNull() }
+            .sorted()
+
+        val times = mutableListOf<Int>()
+        var accum = 0.0
+        for (p in pageNumbers) {
+            val pageJson = pagesObj.optJSONObject(p.toString()) ?: continue
+
+            // lines
+            val lineKeys = pageJson.keys().asSequence()
+                .filter { it.startsWith("line") }
+                .sortedBy { it.removePrefix("line ").toIntOrNull() ?: Int.MAX_VALUE }
+
+            var pageDuration = 0.0
+            for (lk in lineKeys) {
+                val desc = pageJson.optString(lk)
+                val ratios = HighlightHelper.parseMeasureRatios(desc)
+                val beatsSum = ratios.sum()
+                pageDuration += beatsSum * measureMs
+            }
+
+            accum += pageDuration
+            times.add(accum.roundToInt())
+        }
+        return times
+    }
+
+    /** JSON line descriptions에 맞춰 라인 정보를 재구성 */
+    private fun buildLinesFromJson(xmlFile: File, rootJson: JSONObject): List<MusicXmlParser.Line> {
+        val pagesJson = rootJson.optJSONObject("pages") ?: return emptyList()
+        val measures = MusicXmlParser.getMeasures(xmlFile)
+        val lines = mutableListOf<MusicXmlParser.Line>()
+
+        var idx = 0
+        var currentTime = 0
+
+        val bpmDefault = rootJson.optInt("bpm", 120)
+
+        while (idx < measures.size) {
+            val page = measures[idx].pageNumber
+            val pageObj = pagesJson.optJSONObject(page.toString()) ?: break
+            // iterate line keys sorted
+            val lineKeys = pageObj.keys().asSequence()
+                .filter { it.startsWith("line") }
+                .sortedBy { it.removePrefix("line ").toIntOrNull() ?: Int.MAX_VALUE }
+            var lineNumber = 0
+            for (lk in lineKeys) {
+                val ratios = HighlightHelper.parseMeasureRatios(pageObj.optString(lk))
+                val count = ratios.size
+                val ratioSum = ratios.sum().coerceAtLeast(1.0)
+                val startIdx = idx
+                val endIdx = (idx + count).coerceAtMost(measures.size)
+                val subMeasures = measures.subList(startIdx, endIdx)
+                val startTime = currentTime
+                val tempo = subMeasures.firstOrNull()?.tempo ?: bpmDefault.toFloat()
+                val measureMs = (60_000 / tempo) * 4  // 4/4 가정
+                val duration = (measureMs * ratioSum).roundToInt()
+                currentTime += duration
+                val measureNums = subMeasures.map { it.number }
+                lines.add(MusicXmlParser.Line(startTime, currentTime, page, lineNumber, measureNums))
+                idx += count
+                lineNumber++
+                if (idx >= measures.size) break
+            }
+        }
+        return lines
+    }
+
+    /** JSON 메타데이터에 명시된 전체 마디 수 계산 */
+    private fun computeMeasureCountFromJson(rootJson: JSONObject): Int {
+        val pagesObj = rootJson.optJSONObject("pages") ?: return 0
+        var total = 0
+        pagesObj.keys().forEach { pageKey ->
+            val pageObj = pagesObj.optJSONObject(pageKey) ?: return@forEach
+            pageObj.keys().forEach { lineKey ->
+                if (lineKey.startsWith("line")) {
+                    val desc = pageObj.optString(lineKey)
+                    val ratios = HighlightHelper.parseMeasureRatios(desc)
+                    total += ratios.size
+                }
+            }
+        }
+        return total
     }
 }
 

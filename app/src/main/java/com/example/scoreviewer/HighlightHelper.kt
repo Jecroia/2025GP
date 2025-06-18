@@ -95,6 +95,8 @@ object HighlightHelper {
         lineDescription: String
     ): List<Int> {
         val ratios = parseMeasureRatios(lineDescription)
+        // 추가 디버그: 라인 설명과 파싱된 비율 로그
+        Log.d("HighlightDebug", "lineDesc=$lineDescription, parsedRatios=$ratios")
         val total = ratios.sum()
         val totalMs = endTimeMs - startTimeMs
 
@@ -106,9 +108,15 @@ object HighlightHelper {
             return result
         }
 
-        val result = ratios.map { ((it / total) * totalMs).roundToInt() }
-        Log.d("HighlightHelper", "splitLineDuration: ratios=$ratios totalMs=$totalMs result=$result")
-        return result
+        val baseDurations = ratios.map { ((it / total) * totalMs).roundToInt() }.toMutableList()
+        // 누적 반올림 오차 보정: 마지막 값에 차이를 더해 합계를 맞춘다
+        val adjustment = totalMs - baseDurations.sum()
+        if (baseDurations.isNotEmpty()) {
+            baseDurations[baseDurations.lastIndex] = (baseDurations.last() + adjustment)
+        }
+
+        Log.d("HighlightHelper", "splitLineDuration: ratios=$ratios totalMs=$totalMs result=$baseDurations (adjust=$adjustment)")
+        return baseDurations
     }
 
     fun getHighlightRect(

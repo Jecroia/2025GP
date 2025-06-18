@@ -217,7 +217,8 @@ object MusicXmlParser {
                                     if (insideNote) {
                                         val durationValue = parser.nextText().toIntOrNull() ?: 0
                                         currentDuration += durationValue
-                                        Log.d(TAG, "Accumulated note duration: +$durationValue → $currentDuration")
+                                        // 세부 노트 duration 로그는 노이즈가 많아 주석 처리
+                                        // Log.d(TAG, "Accumulated note duration: +$durationValue → $currentDuration")
                                     }
                                 }
                                 "repeat" -> {
@@ -311,7 +312,8 @@ object MusicXmlParser {
             e.printStackTrace()
         }
 
-        Log.d(TAG, "Parsed ${measures.size} measures")
+        val totalDurDivisions = measures.sumOf { it.duration }
+        Log.d(TAG, "Parsed ${measures.size} measures, totalDuration=${totalDurDivisions} (division units)")
         return measures
     }
 
@@ -384,6 +386,9 @@ object MusicXmlParser {
                 (measure.beats * 60_000 / measure.tempo).roundToInt()
             }
             
+            // 기존 로그 보강: tempo/beatType 포함
+            Log.d(TAG, "measure=${measure.number} tempo=${measure.tempo} beats=${measure.beats} beatType=${measure.beatType} duration=${measureDurationMs}ms")
+            // divisons 기반 추가 정보 유지 (참고용)
             Log.d(TAG, "Measure ${measure.number}: tempo=$currentTempo BPM, divisions=$currentDivisions, " +
                     "duration=$measureDurationMs ms (duration=${measure.duration}, beats=${measure.beats})")
             
@@ -477,4 +482,7 @@ object MusicXmlParser {
         }
         return -1
     }
+
+    /** 외부에서 마디 리스트가 필요할 때 사용 */
+    fun getMeasures(xmlFile: File): List<Measure> = parseMeasures(xmlFile)
 } 

@@ -95,6 +95,7 @@ object MidiLoader {
 
             val durationMillis = ticksToMillis(maxTicks, tempo, division)
             Log.d("MidiLoader", "Total duration: $durationMillis ms (ticks=$maxTicks, tempo=$tempo, division=$division)")
+            Log.d("MidiLoader", "durationMillis=$durationMillis")
             return durationMillis
         }
     }
